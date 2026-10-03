@@ -7,6 +7,11 @@ export const metadata: Metadata = {
   },
   description:
     "Pitch, debate and track crypto investment ideas with the Imperial Fintech & Blockchain Society. A member-led paper investment fund.",
+  icons: {
+    icon: { url: "/logo.jpg", type: "image/jpeg" },
+    shortcut: "/logo.jpg",
+    apple: "/logo.jpg",
+  },
 };
 export default function RootLayout({
   children,

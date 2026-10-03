@@ -32,21 +32,25 @@ export default function Home() {
       </header>
       <main>
         <section className="hero-grid relative overflow-hidden border-y border-slate-100">
-          <div className="absolute -right-40 top-0 h-[600px] w-[600px] rounded-full bg-blue-100/40 blur-3xl" />
-          <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[1.05fr_1fr] lg:gap-16 lg:py-28">
-            <div>
-              <h1 className="mt-7 text-5xl font-bold leading-[1.08] tracking-[-.055em] text-navy sm:text-6xl lg:text-[72px]">
-                Great ideas
-                <br />
-                deserve a<br />
-                <span className="text-brand">second opinion.</span>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute left-1/2 top-0 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-blue-100/50 blur-3xl"
+          />
+          <div className="relative mx-auto max-w-7xl px-5 py-20 text-center sm:px-8 sm:py-24 lg:py-28">
+            <div className="mx-auto max-w-6xl">
+              <p className="eyebrow text-brand">
+                Imperial Fintech &amp; Blockchain Society
+              </p>
+              <h1 className="mt-6 text-[clamp(2.75rem,6.7vw,6rem)] font-bold leading-[1.04] tracking-[-.055em] text-balance text-navy">
+                Where ideas become
+                <span className="block text-brand">investments.</span>
               </h1>
-              <p className="mt-6 max-w-md text-base leading-7 text-slate-500">
+              <p className="mx-auto mt-7 max-w-2xl text-base leading-7 text-balance text-slate-500 sm:text-lg sm:leading-8">
                 A crypto paper fund, built by the community. Pitch your thesis,
                 challenge the thinking, and turn collective conviction into a
                 track record.
               </p>
-              <div className="mt-8 flex flex-wrap gap-3">
+              <div className="mt-9 flex flex-wrap justify-center gap-3">
                 <Link href="/register" className="btn px-6 py-3.5">
                   Find your consensus
                   <ArrowRight size={17} />
@@ -56,10 +60,16 @@ export default function Home() {
                   <ChevronRight size={16} />
                 </a>
               </div>
-              <div className="mt-7 flex items-center gap-2 text-xs text-slate-400">
-                <ShieldCheck size={15} className="text-brand" />
-                Imperial members only<span className="mx-2">·</span>100% paper
-                money
+              <div className="mt-7 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-slate-500">
+                <span className="inline-flex items-center gap-2">
+                  <ShieldCheck
+                    size={15}
+                    aria-hidden="true"
+                    className="text-brand"
+                  />
+                  Imperial members only
+                </span>
+                <span>100% paper money</span>
               </div>
             </div>
           </div>

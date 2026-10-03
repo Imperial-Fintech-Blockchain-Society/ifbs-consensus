@@ -7,14 +7,14 @@ export function Brand({ dark = false }: { dark?: boolean }) {
       aria-label="IFBS Consensus home"
       className="flex items-center gap-3"
     >
-      <div className="flex h-11 w-11 shrink-0 items-center overflow-hidden rounded-lg bg-white">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
         <Image
-          src="/ifbs-logo.jpeg"
+          src="/logo.jpg"
           alt="Imperial Fintech & Blockchain Society"
-          width={120}
-          height={48}
+          width={44}
+          height={44}
           priority
-          className="h-12 w-[120px] max-w-none shrink-0"
+          className="h-full w-full object-contain"
         />
       </div>
       <div className={dark ? "text-white" : "text-navy"}>
