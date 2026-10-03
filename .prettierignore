@@ -1,0 +1,7 @@
+node_modules
+.next
+.next-e2e
+package-lock.json
+AGENTS.md
+CLAUDE.md
+PRODUCT-SPEC.md

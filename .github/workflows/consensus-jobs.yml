@@ -1,0 +1,45 @@
+name: Consensus scheduled jobs
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+    - cron: "0 18 * * 0"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Job to run
+        required: true
+        type: choice
+        options: [resolve, monitor, digest]
+permissions:
+  contents: read
+concurrency:
+  group: consensus-jobs
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APP_URL: ${{ secrets.APP_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      SCHEDULE: ${{ github.event.schedule }}
+      SELECTED_JOB: ${{ inputs.job }}
+    steps:
+      - name: Trigger authenticated jobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$APP_URL"
+          test -n "$CRON_SECRET"
+          if [ -n "$SELECTED_JOB" ]; then
+            jobs="$SELECTED_JOB"
+          elif [ "$SCHEDULE" = "0 18 * * 0" ]; then
+            jobs="digest"
+          else
+            jobs="resolve monitor"
+          fi
+          for job in $jobs; do
+            curl --fail-with-body --retry 2 --retry-delay 10 --max-time 310 \
+              -X POST -H "Authorization: Bearer $CRON_SECRET" \
+              "${APP_URL%/}/api/cron/$job"
+          done

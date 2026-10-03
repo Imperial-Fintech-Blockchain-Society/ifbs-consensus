@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PitchStatus {
+  PENDING
+  QUEUED
+  PASSED
+  REJECTED
+}
+
+enum CloseProposalStatus {
+  PENDING
+  PASSED
+  REJECTED
+  CANCELLED
+}
+
+enum PositionStatus {
+  OPEN
+  CLOSED
+}
+
+model User {
+  id             String          @id @default(cuid())
+  name           String
+  email          String          @unique
+  passwordHash   String
+  createdAt      DateTime        @default(now())
+  digestEnabled  Boolean         @default(true)
+  pitches        Pitch[]
+  votes          Vote[]
+  closeProposals CloseProposal[]
+  closeVotes     CloseVote[]
+}
+
+model Pitch {
+  id                String      @id @default(cuid())
+  authorId          String
+  author            User        @relation(fields: [authorId], references: [id])
+  coinId            String
+  tokenName         String
+  ticker            String
+  title             String
+  thesis            String
+  stopLossPercent   Decimal     @db.Decimal(8, 2)
+  takeProfitPercent Decimal     @db.Decimal(8, 2)
+  allocation        Decimal     @default(10000) @db.Decimal(18, 2)
+  quorum            Int         @default(5)
+  status            PitchStatus @default(PENDING)
+  createdAt         DateTime    @default(now())
+  expiresAt         DateTime
+  resolvedAt        DateTime?
+  votes             Vote[]
+  position          Position?
+
+  @@index([status, expiresAt])
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  pitchId   String
+  pitch     Pitch    @relation(fields: [pitchId], references: [id])
+  voterId   String
+  voter     User     @relation(fields: [voterId], references: [id])
+  decision  Boolean
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@unique([pitchId, voterId])
+}
+
+model Position {
+  id             String          @id @default(cuid())
+  pitchId        String          @unique
+  pitch          Pitch           @relation(fields: [pitchId], references: [id])
+  coinId         String
+  ticker         String
+  entryPrice     Decimal         @db.Decimal(30, 12)
+  quantity       Decimal         @db.Decimal(30, 12)
+  allocation     Decimal         @db.Decimal(18, 2)
+  targetPrice    Decimal         @db.Decimal(30, 12)
+  stopPrice      Decimal         @db.Decimal(30, 12)
+  entryTime      DateTime        @default(now())
+  status         PositionStatus  @default(OPEN)
+  closePrice     Decimal?        @db.Decimal(30, 12)
+  closeTime      DateTime?
+  closeReason    String?
+  closeProposals CloseProposal[]
+
+  @@index([status])
+}
+
+model Fund {
+  id             String  @id @default("main")
+  initialCapital Decimal @default(100000) @db.Decimal(18, 2)
+  cash           Decimal @default(100000) @db.Decimal(18, 2)
+  allocated      Decimal @default(0) @db.Decimal(18, 2)
+}
+
+model CloseProposal {
+  id         String              @id @default(cuid())
+  positionId String
+  position   Position            @relation(fields: [positionId], references: [id])
+  proposerId String
+  proposer   User                @relation(fields: [proposerId], references: [id])
+  reason     String
+  status     CloseProposalStatus @default(PENDING)
+  createdAt  DateTime            @default(now())
+  expiresAt  DateTime
+  resolvedAt DateTime?
+  votes      CloseVote[]
+
+  @@index([status, expiresAt])
+  @@index([positionId, createdAt])
+}
+
+model CloseVote {
+  id         String        @id @default(cuid())
+  proposalId String
+  proposal   CloseProposal @relation(fields: [proposalId], references: [id])
+  voterId    String
+  voter      User          @relation(fields: [voterId], references: [id])
+  decision   Boolean
+  reason     String
+  createdAt  DateTime      @default(now())
+
+  @@unique([proposalId, voterId])
+}
+
+model RateLimit {
+  key       String   @id
+  count     Int      @default(1)
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+model DigestDelivery {
+  id     String   @id @default(cuid())
+  week   String
+  userId String
+  sentAt DateTime @default(now())
+
+  @@unique([week, userId])
+}
