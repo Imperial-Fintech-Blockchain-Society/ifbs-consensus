@@ -32,6 +32,9 @@ const market = createServer((req, res) => {
     return;
   }
   const path = new URL(req.url, "http://localhost:3012");
+  // Give each run a unique market URL so Next's fetch cache cannot reuse
+  // mocked quotes from a previous isolated test schema.
+  path.pathname = path.pathname.slice(schema.length + 1);
   if (path.pathname === "/search")
     res.end(
       JSON.stringify({
@@ -81,7 +84,7 @@ const env = {
   ...process.env,
   DATABASE_URL: databaseUrl,
   NEXT_PUBLIC_APP_URL: base,
-  COINGECKO_API_URL: "http://localhost:3012",
+  COINGECKO_API_URL: `http://localhost:3012/${schema}`,
   CRON_SECRET: cronSecret,
   JWT_SECRET: randomBytes(48).toString("hex"),
   RESEND_API_KEY: "re_test_mock",
@@ -167,6 +170,26 @@ try {
     extraHTTPHeaders: headers,
   });
   clients.push(anonymous);
+  const cashOnly = await anonymous.get("/api/fund");
+  assert.equal(cashOnly.status(), 200);
+  const initialPublicFund = await cashOnly.json();
+  assert.equal(initialPublicFund.total, 100000);
+  assert.equal(initialPublicFund.holdings[0].ticker, "CASH");
+  await page.goto(`${base}/fund`);
+  await page
+    .getByRole("img", { name: "Holdings by current USD value" })
+    .waitFor();
+  assert.equal(new URL(page.url()).pathname, "/fund");
+  assert.ok(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+    "Public fund should fit mobile width",
+  );
+  await page.screenshot({
+    path: `${artifacts}/public-fund-mobile.png`,
+    fullPage: true,
+  });
   assert.equal(
     (await anonymous.post("/api/pitches", { data: {} })).status(),
     401,
@@ -499,6 +522,65 @@ try {
     "OPEN",
   );
   await page.setViewportSize({ width: 1440, height: 1000 });
+  // Complete public valuations are readable without a session; snapshots use
+  // actual cash and current crypto prices, and never include member details.
+  const publicResponse = await anonymous.get("/api/fund");
+  assert.equal(publicResponse.status(), 200);
+  const publicData = await publicResponse.json();
+  const ledger = await db.fund.findUnique({ where: { id: "main" } });
+  const openHoldings = await db.position.findMany({
+    where: { status: "OPEN" },
+  });
+  const expectedValue =
+    Number(ledger.cash) +
+    openHoldings.reduce((sum, p) => sum + Number(p.quantity) * price, 0);
+  assert.equal(publicData.total, expectedValue);
+  assert.equal(publicData.holdings.length, 2);
+  assert.deepEqual(Object.keys(publicData).sort(), [
+    "fetchedAt",
+    "history",
+    "holdings",
+    "initialCapital",
+    "total",
+  ]);
+  await db.fundSnapshot.deleteMany();
+  stale = true;
+  assert.equal(
+    (
+      await anonymous.post("/api/cron/monitor", { headers: cronHeaders })
+    ).status(),
+    503,
+  );
+  assert.equal(
+    await db.fundSnapshot.count(),
+    0,
+    "Stale prices must never create a performance observation",
+  );
+  stale = false;
+  for (const response of await Promise.all(
+    [1, 2].map(() =>
+      anonymous.post("/api/cron/monitor", { headers: cronHeaders }),
+    ),
+  ))
+    assert.equal(response.status(), 200);
+  assert.equal(
+    await db.fundSnapshot.count(),
+    1,
+    "Overlapping jobs should record once",
+  );
+  assert.equal(
+    Number((await db.fundSnapshot.findFirst()).value),
+    expectedValue,
+  );
+  await page.goto(`${base}/fund`);
+  await page
+    .getByRole("img", { name: "Holdings by current USD value" })
+    .waitFor();
+  await page.getByText("Bitcoin", { exact: true }).waitFor();
+  await page.screenshot({
+    path: `${artifacts}/public-fund-desktop.png`,
+    fullPage: true,
+  });
   await page.goto(`${base}/portfolio`);
   await page.getByText("$100.00", { exact: true }).first().waitFor();
   await page.getByText(/^Refreshed /).waitFor();
@@ -799,7 +881,7 @@ try {
     `SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname = '${schema}' AND tablename <> '_prisma_migrations'`,
   );
   assert.ok(
-    rows.length === 9 && rows.every((row) => row.rowsecurity),
+    rows.length === 10 && rows.every((row) => row.rowsecurity),
     "All app tables should enable RLS",
   );
   await context.request.post(`${base}/api/auth/logout`, { headers });
@@ -840,7 +922,7 @@ try {
   });
   assert.deepEqual(browserErrors, [], "Browser should have no uncaught errors");
   console.log(
-    "PASS: registration, domain/CSRF protection, login/logout, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, quorum/tie rejection, TP/SL execution, portfolio P&L, digest preferences/idempotency, RLS, and mobile layouts.",
+    "PASS: registration, domain/CSRF protection, login/logout, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, quorum/tie rejection, TP/SL execution, portfolio P&L, public fund charts/valuations, snapshot integrity, digest preferences/idempotency, RLS, and mobile layouts.",
   );
   console.log(`Screenshots: ${artifacts}`);
 } finally {

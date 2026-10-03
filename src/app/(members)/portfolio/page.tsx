@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { PageHeading } from "@/components/ui";
 import { Portfolio } from "@/components/portfolio";
 import { fundSummary } from "@/lib/fund";
+import Link from "next/link";
 export const metadata = { title: "The paper fund" };
 export default async function Fund() {
   const fund = await fundSummary();
@@ -19,6 +20,12 @@ export default async function Fund() {
   return (
     <>
       <PageHeading title="Paper fund" />
+      <Link
+        href="/fund"
+        className="mb-6 inline-block text-sm font-semibold text-brand"
+      >
+        View public fund charts ↗
+      </Link>
       <Portfolio
         fund={fund}
         positions={positions.map((p) => ({

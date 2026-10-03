@@ -15,6 +15,9 @@ export default function Home() {
       <header className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
         <Brand />
         <nav className="flex items-center gap-5 text-sm">
+          <Link href="/fund" className="font-semibold text-brand">
+            Paper fund
+          </Link>
           <a
             href="#how-it-works"
             className="hidden text-slate-500 hover:text-brand sm:block"
@@ -55,8 +58,8 @@ export default function Home() {
                   Find your consensus
                   <ArrowRight size={17} />
                 </Link>
-                <a href="#how-it-works" className="btn-secondary">
-                  Explore the process
+                <a href="/fund" className="btn-secondary">
+                  Explore fund performance
                   <ChevronRight size={16} />
                 </a>
               </div>

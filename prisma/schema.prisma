@@ -103,6 +103,11 @@ model Fund {
   allocated      Decimal @default(0) @db.Decimal(18, 2)
 }
 
+model FundSnapshot {
+  capturedAt DateTime @id @default(now())
+  value      Decimal  @db.Decimal(30, 2)
+}
+
 model CloseProposal {
   id         String              @id @default(cuid())
   positionId String

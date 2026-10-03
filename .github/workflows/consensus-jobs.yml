@@ -18,6 +18,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
+    environment: Production
     timeout-minutes: 15
     env:
       APP_URL: ${{ secrets.APP_URL }}
@@ -29,8 +30,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$APP_URL"
-          test -n "$CRON_SECRET"
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::error::Set APP_URL and CRON_SECRET in the Production environment secrets."
+            exit 1
+          fi
           if [ -n "$SELECTED_JOB" ]; then
             jobs="$SELECTED_JOB"
           elif [ "$SCHEDULE" = "0 18 * * 0" ]; then
@@ -39,7 +42,35 @@ jobs:
             jobs="resolve monitor"
           fi
           for job in $jobs; do
-            curl --fail-with-body --retry 2 --retry-delay 10 --max-time 310 \
-              -X POST -H "Authorization: Bearer $CRON_SECRET" \
-              "${APP_URL%/}/api/cron/$job"
+            url="${APP_URL%/}/api/cron/$job"
+            response_file="$(mktemp)"
+
+            echo "Calling $url"
+
+            set +e
+            http_code="$(
+              curl \
+                --silent \
+                --show-error \
+                --output "$response_file" \
+                --write-out "%{http_code}" \
+                --request POST \
+                --header "Authorization: Bearer $CRON_SECRET" \
+                --max-time 310 \
+                "$url"
+            )"
+            curl_status=$?
+            set -e
+
+            echo "curl exit code: $curl_status"
+            echo "HTTP status: $http_code"
+            echo "Response body:"
+            cat "$response_file"
+            echo
+            rm -f "$response_file"
+
+            if [ "$curl_status" -ne 0 ] || [[ "$http_code" != 2* ]]; then
+              echo "::error::Cron job '$job' failed"
+              exit 1
+            fi
           done
