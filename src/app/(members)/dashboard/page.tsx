@@ -142,7 +142,7 @@ export default async function Dashboard() {
           <h2 className="text-lg font-bold">The consensus rules</h2>
           <div className="mt-5 space-y-4">
             {[
-              ["7 days", "To debate an investment thesis"],
+              ["3 days", "To debate an investment thesis"],
               ["5 votes", "Minimum quorum to pass a pitch"],
               [">50%", "Approval needed to execute"],
             ].map(([n, t]) => (

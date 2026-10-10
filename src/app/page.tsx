@@ -105,7 +105,7 @@ export default function Home() {
               {
                 icon: MessagesSquare,
                 title: "Put it to the room",
-                body: "Members debate and vote over seven days. Five votes and a majority approval put your idea into motion.",
+                body: "Members debate and vote over three days. Five votes and a majority approval put your idea into motion.",
               },
               {
                 icon: ChartNoAxesCombined,

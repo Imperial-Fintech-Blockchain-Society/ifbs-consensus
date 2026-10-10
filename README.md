@@ -39,7 +39,7 @@ Generate each secret separately with `openssl rand -hex 32`. Keep `.env` private
 - Custom bcrypt password authentication, HS256 JWT sessions, HTTP-only cookies, same-origin mutation checks and database-backed rate limits.
 - Member dashboard, searchable/filterable pitches, CoinGecko token selection, Markdown thesis editing and preview, and immutable published targets.
 - One immutable vote per member per pitch; agree/disagree requires a public reason of at least 20 characters. Authors may vote under the same rules as other members.
-- Voting lasts seven days. Resolution happens after the deadline, requires at least five votes, and passes only with more than 50% agreement. A tie or missing quorum rejects the pitch.
+- Voting lasts three days. Resolution happens after the deadline, requires at least five votes, and passes only with more than 50% agreement. A tie or missing quorum rejects the pitch.
 - Pitch investments default to $10,000 and accept any positive cent amount up to $10,000.
 - The fund starts with $100,000 cash. Executions require sufficient cash and cannot push open allocations above $100,000. Approved pitches without available capital are queued and retried by the scheduler.
 - Every exit returns the actual proceeds to cash, including profit or loss. Cash, open allocations, and positions update atomically under a shared fund lock. Available capital is the smaller of cash and remaining room under the $100,000 allocation cap.

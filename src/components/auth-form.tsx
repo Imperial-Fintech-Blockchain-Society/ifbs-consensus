@@ -104,6 +104,29 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           {error}
         </p>
       )}
+      {register && (
+        <p className="text-center text-xs leading-5 text-slate-500">
+          By signing up, you accept our{" "}
+          <a
+            href="/privacy-policy.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-brand underline"
+          >
+            Privacy Policy
+          </a>{" "}
+          and{" "}
+          <a
+            href="/terms-and-conditions.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-brand underline"
+          >
+            Terms and Conditions
+          </a>
+          .
+        </p>
+      )}
       <button disabled={busy} className="btn w-full py-3.5">
         {busy
           ? "Please wait…"

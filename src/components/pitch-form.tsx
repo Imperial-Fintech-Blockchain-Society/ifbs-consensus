@@ -260,7 +260,7 @@ export function PitchForm() {
         </p>
       </div>
       <div className="rounded-xl bg-blue-50 p-4 text-xs leading-6 text-slate-600">
-        7-day vote · 5-vote quorum · Majority approval. Execution requires
+        3-day vote · 5-vote quorum · Majority approval. Execution requires
         available capital.
       </div>
       {error && (

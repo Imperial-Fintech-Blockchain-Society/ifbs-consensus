@@ -4,7 +4,7 @@ The fund starts with **$100,000 of simulated USD cash**. Buying and selling upda
 
 ## Investing after a pitch expires
 
-A pitch has a **seven-day voting window**. Voting stops at its expiry timestamp, but the investment happens when the next successful scheduler run processes it.
+A pitch has a **three-day voting window**. Voting stops at its expiry timestamp, but the investment happens when the next successful scheduler run processes it.
 
 A pitch passes with **at least five votes and strictly more than 50% agreement**. Ties and missing quorum are rejected. An approved investment requires enough cash and cannot push the original cost of open positions above **$100,000**. Each pitch can invest up to **$10,000**.
 

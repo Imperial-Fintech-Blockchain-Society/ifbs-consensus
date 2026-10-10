@@ -21,7 +21,7 @@ A web-based platform for the Imperial Fintech and Blockchain Society (IFBS) to c
 
 - **Voting UI:** Members view active pitches and select "AGREE" or "DON'T AGREE".
 - **Reasoning:** A text box is required to submit the vote, encouraging rigorous debate rather than blind clicking.
-- **Resolution Logic:** Pitches have a set voting window (e.g., 7 days). If a pitch reaches a defined quorum (e.g., minimum 5 votes) and a majority approval (e.g., &gt;50%), it automatically "executes."
+- **Resolution Logic:** Pitches have a set voting window (e.g., 3 days). If a pitch reaches a defined quorum (e.g., minimum 5 votes) and a majority approval (e.g., &gt;50%), it automatically "executes."
 
 **D. Paper Trading &amp; PnL Dashboard**
 

@@ -47,7 +47,7 @@ export const voteSchema = z.object({
     .min(20, "Explain your vote in at least 20 characters.")
     .max(2000),
 });
-export const VOTING_DAYS = 7;
+export const VOTING_DAYS = 3;
 export const QUORUM = 5;
 export const closeProposalSchema = z.object({
   reason: voteSchema.shape.reason,

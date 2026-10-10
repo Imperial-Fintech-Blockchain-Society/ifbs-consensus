@@ -6,7 +6,7 @@ This is a proposed implementation plan, not a description of features already bu
 
 ## 1. Starting point and implementation order
 
-The current app already provides token selection, Markdown pitches, reasoned voting, allocations, a shared paper fund, stop-loss/take-profit exits, and portfolio valuation. It starts with $100,000 cash, caps each pitch at $10,000, and caps open cost allocations at $100,000. Approval follows a seven-day vote; execution can occur later if capital or prices are unavailable. It currently omits fees and slippage.
+The current app already provides token selection, Markdown pitches, reasoned voting, allocations, a shared paper fund, stop-loss/take-profit exits, and portfolio valuation. It starts with $100,000 cash, caps each pitch at $10,000, and caps open cost allocations at $100,000. Approval follows a three-day vote; execution can occur later if capital or prices are unavailable. It currently omits fees and slippage.
 
 Relevant existing files:
 
@@ -132,7 +132,7 @@ Compare the same starting capital and end date. Track unused cash, expired unfil
 3. Parameterize fees and slippage on entries and exits. Label these as simulation assumptions, not observed venue costs.
 4. Fix an exit/evaluation policy across entry strategies and include any remaining cash in ending wealth.
 5. Generate an event log of decisions, fills, quantities, cash, costs, and expiry outcomes.
-6. Include a selectable seven-day approval delay when modelling Consensus pitches; a backtest cannot assume entry before voting closes.
+6. Include a selectable three-day approval delay when modelling Consensus pitches; a backtest cannot assume entry before voting closes.
 
 ### Step 3: keep development and evaluation separate
 
@@ -253,7 +253,7 @@ For MVP, members paste source links and extracted evidence; no arbitrary server-
 
 ### Step 4: add a reviewer workflow
 
-Introduce draft research records so authors can complete and review the pack before starting the current seven-day pitch vote. Require an independent reviewer for the educational workflow; do not silently change the voting engine's existing quorum or author-vote rules.
+Introduce draft research records so authors can complete and review the pack before starting the current three-day pitch vote. Require an independent reviewer for the educational workflow; do not silently change the voting engine's existing quorum or author-vote rules.
 
 Review states can be draft, changes requested, and reviewed. “Reviewed” means the checklist was examined, not that the token is safe. Persist unresolved concerns so voters can see them. Any material change after publication should produce a new version and, if investment terms change, a new proposal rather than rewriting what members voted on.
 
