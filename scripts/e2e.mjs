@@ -1206,8 +1206,16 @@ try {
     ).status(),
     200,
   );
-  assert.equal(emailsSent, 4, "A repeated digest should not resend");
-  assert.equal(broadcastsSent, 1);
+  assert.equal(
+    emailsSent,
+    8,
+    "Each new digest goes to current opted-in members",
+  );
+  assert.equal(broadcastsSent, 2);
+  assert.equal(broadcastsCreated, 2, "A new request creates a fresh broadcast");
+  const nextCampaign = await db.digestBroadcast.findFirst();
+  assert.notEqual(nextCampaign.broadcastId, campaign.broadcastId);
+  assert.equal(nextCampaign.generation, 1);
   const rows = await db.$queryRawUnsafe(
     `SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname = '${schema}' AND tablename <> '_prisma_migrations'`,
   );
@@ -1253,7 +1261,7 @@ try {
   });
   assert.deepEqual(browserErrors, [], "Browser should have no uncaught errors");
   console.log(
-    "PASS: email confirmation, pending-account access, expiry/replay/concurrent confirmation, resend limits, delivery retry, domain/CSRF protection, login/logout, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, quorum/tie rejection, TP/SL execution, portfolio P&L, public fund charts/valuations, snapshot integrity, digest preferences/idempotency, RLS, and mobile layouts.",
+    "PASS: email confirmation, pending-account access, expiry/replay/concurrent confirmation, resend limits, delivery retry, domain/CSRF protection, login/logout, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, quorum/tie rejection, TP/SL execution, portfolio P&L, public fund charts/valuations, snapshot integrity, digest preferences, fresh broadcasts/retry recovery, RLS, and mobile layouts.",
   );
   console.log(`Screenshots: ${artifacts}`);
 } finally {

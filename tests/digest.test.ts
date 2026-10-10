@@ -41,6 +41,7 @@ const ok = <T>(data: T) => ({ data, error: null });
 const list = <T>(data: T[]) => ok({ data, has_more: false });
 let state: {
   week: string;
+  generation: number;
   broadcastId: string | null;
   segmentId: string | null;
   submittedAt: Date | null;
@@ -57,6 +58,7 @@ beforeEach(() => {
   vi.spyOn(Date, "now").mockImplementation(() => (tick += 1000));
   state = {
     week: "test-week",
+    generation: 0,
     broadcastId: null,
     segmentId: null,
     submittedAt: null,
@@ -65,9 +67,12 @@ beforeEach(() => {
   mocks.db.digestBroadcast.findUniqueOrThrow.mockImplementation(async () => ({
     ...state,
   }));
-  mocks.db.digestBroadcast.update.mockImplementation(async ({ data }) =>
-    Object.assign(state, data),
-  );
+  mocks.db.digestBroadcast.update.mockImplementation(async ({ data }) => {
+    const { generation, ...rest } = data;
+    if (generation) state.generation += generation.increment;
+    Object.assign(state, rest);
+    return { ...state };
+  });
   mocks.db.digestDelivery.findMany.mockResolvedValue([]);
   mocks.db.pitch.findMany.mockResolvedValue([
     {
@@ -146,6 +151,66 @@ describe("Broadcast digest", () => {
     });
     expect(mocks.broadcasts.send).toHaveBeenCalledTimes(1);
     expect(state.submittedAt).toBeInstanceOf(Date);
+  });
+  it("creates distinct broadcasts for successive successful requests in the same week", async () => {
+    mocks.broadcasts.create
+      .mockResolvedValueOnce(ok({ id: "first" }))
+      .mockResolvedValueOnce(ok({ id: "second" }));
+    expect(await sendDigest()).toMatchObject({
+      broadcastId: "first",
+      queued: 1,
+    });
+    expect(await sendDigest()).toMatchObject({
+      broadcastId: "second",
+      queued: 1,
+    });
+    expect(mocks.broadcasts.create).toHaveBeenCalledTimes(2);
+    expect(mocks.broadcasts.send.mock.calls.map(([id]) => id)).toEqual([
+      "first",
+      "second",
+    ]);
+    const names = mocks.broadcasts.create.mock.calls.map(([data]) => data.name);
+    expect(names[0]).not.toEqual(names[1]);
+    expect(names[1]).toBe(`${names[0]} #1`);
+    expect(mocks.db.user.findMany).toHaveBeenLastCalledWith({
+      where: { digestEnabled: true },
+      select: { email: true },
+    });
+  });
+  it("starts a fresh digest when the saved broadcast was already submitted", async () => {
+    state.broadcastId = "previous-sent";
+    state.submittedAt = new Date();
+    expect(await sendDigest()).toMatchObject({
+      broadcastId: "draft",
+      queued: 1,
+    });
+    expect(mocks.broadcasts.get).not.toHaveBeenCalledWith("previous-sent");
+    expect(mocks.broadcasts.create).toHaveBeenCalledTimes(1);
+    expect(state.generation).toBe(1);
+  });
+  it("recovers a new generation's remote draft after losing the create acknowledgement", async () => {
+    state.generation = 2;
+    mocks.broadcasts.list.mockImplementation(async () =>
+      list([
+        {
+          id: "recovered",
+          name: mocks.broadcasts.create.mock.calls[0][0].name,
+        },
+      ]),
+    );
+    mocks.broadcasts.list.mockResolvedValueOnce(list([]));
+    mocks.broadcasts.create.mockResolvedValueOnce({
+      data: null,
+      error: { name: "application_error" },
+    });
+    await expect(sendDigest()).rejects.toMatchObject({ status: 503 });
+    expect(mocks.broadcasts.create.mock.calls[0][0].name).toMatch(/ #2$/);
+    expect(await sendDigest()).toMatchObject({
+      broadcastId: "recovered",
+      queued: 1,
+    });
+    expect(mocks.broadcasts.create).toHaveBeenCalledTimes(1);
+    expect(mocks.broadcasts.send).toHaveBeenCalledWith("recovered");
   });
   it("preserves remote unsubscribes even when the app preference remains enabled", async () => {
     mocks.contacts.list.mockResolvedValue(

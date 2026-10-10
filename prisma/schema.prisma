@@ -168,6 +168,7 @@ model DigestDelivery {
 
 model DigestBroadcast {
   week        String    @id
+  generation  Int       @default(0)
   broadcastId String?   @unique
   segmentId   String?
   submittedAt DateTime?

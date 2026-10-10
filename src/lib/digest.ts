@@ -39,7 +39,7 @@ export async function sendDigest() {
   if (lock.count !== 1)
     throw new HttpError(
       503,
-      "This week’s digest is already being processed. Please retry later.",
+      "A digest is already being processed. Please retry later.",
     );
 
   try {
@@ -97,16 +97,29 @@ export async function sendDigest() {
       return items;
     }
 
-    const state = await db.digestBroadcast.findUniqueOrThrow({
+    let state = await db.digestBroadcast.findUniqueOrThrow({
       where: { week },
     });
+    // Each completed submission frees the next request to start a new digest.
+    // Keep unfinished attempts stable so a failed request can safely resume.
+    if (state.submittedAt) {
+      state = await db.digestBroadcast.update({
+        where: { week },
+        data: {
+          generation: { increment: 1 },
+          broadcastId: null,
+          submittedAt: null,
+        },
+      });
+    }
     const namespace = createHash("sha256")
       .update(new URL(NEXT_PUBLIC_APP_URL).origin)
       .digest("hex")
       .slice(0, 12);
-    const name = `IFBS digest ${week} ${namespace}`;
+    // Generation zero retains the old name to recover pre-upgrade drafts.
+    const name = `IFBS digest ${week} ${namespace}${state.generation ? ` #${state.generation}` : ""}`;
     let broadcastId = state.broadcastId;
-    if (!broadcastId && !state.submittedAt) {
+    if (!broadcastId) {
       // Recover even if a previous create succeeded but its response was lost.
       const existing = (
         await pages((after) => resend.broadcasts.list({ limit: 100, after }))
@@ -128,21 +141,15 @@ export async function sendDigest() {
         };
       });
       if (!broadcast) {
-        if (state.submittedAt)
-          return {
-            queued: 0,
-            broadcastId,
-            skipped: "Digest already submitted",
-          };
         broadcastId = null;
       } else {
-        // A sent/queued/scheduled/canceled broadcast must never be sent again.
-        if (state.submittedAt || broadcast.status !== "draft") {
-          if (!state.submittedAt)
-            await db.digestBroadcast.update({
-              where: { week },
-              data: { submittedAt: new Date() },
-            });
+        // Recover a submission whose acknowledgement was lost. Confirm it once
+        // without duplicating delivery; the following call starts a new digest.
+        if (broadcast.status !== "draft") {
+          await db.digestBroadcast.update({
+            where: { week },
+            data: { submittedAt: new Date() },
+          });
           return {
             queued: 0,
             broadcastId,
@@ -150,8 +157,6 @@ export async function sendDigest() {
           };
         }
       }
-    } else if (state.submittedAt) {
-      return { queued: 0, skipped: "Digest already submitted" };
     }
 
     const pitches = await db.pitch.findMany({
@@ -167,16 +172,8 @@ export async function sendDigest() {
       orderBy: { createdAt: "desc" },
     });
     if (!pitches.length) return { queued: 0, skipped: "No new active pitches" };
-    // Keep old transactional delivery records effective during the transition.
-    const delivered = await db.digestDelivery.findMany({
-      where: { week },
-      select: { userId: true },
-    });
     const users = await db.user.findMany({
-      where: {
-        digestEnabled: true,
-        id: { notIn: delivered.map((d) => d.userId) },
-      },
+      where: { digestEnabled: true },
       select: { email: true },
     });
     if (!users.length) return { queued: 0, skipped: "No subscribed members" };
