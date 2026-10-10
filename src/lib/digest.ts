@@ -3,27 +3,12 @@ import { createHash, randomUUID } from "node:crypto";
 import { Resend } from "resend";
 import { db } from "./db";
 import { HttpError } from "./http";
+import { renderDigestEmail } from "./digest-email";
 
 type Result<T> = { data: T | null; error: { name: string } | null };
 
 function plain(text: string) {
   return text.replace(/\{\{\{/g, "{ { {");
-}
-
-function escape(text: string) {
-  return text.replace(
-    /[&<>"'{}]/g,
-    (c) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;",
-        "{": "&#123;",
-        "}": "&#125;",
-      })[c]!,
-  );
 }
 
 export async function sendDigest() {
@@ -257,7 +242,7 @@ export async function sendDigest() {
 
     const base = NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
     const subject = `IFBS Consensus · ${pitches.length} ideas to discuss this week`;
-    const html = `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="background:#f4f6fc;font-family:Arial,sans-serif;font-size:16px;line-height:1.5;color:#142044;margin:0;padding:0"><div style="width:100%;max-width:600px;margin:auto;background:#fefefe;padding:0;overflow-wrap:anywhere"><p style="color:#216cf0;font-weight:bold">IFBS / CONSENSUS</p><h1>This week’s investment ideas</h1><p>Hello Consensus members, add your perspective to the fund.</p>${pitches.map((p) => `<div style="border-top:1px solid #e5e9f3;padding:20px 0"><p style="color:#216cf0">${escape(p.ticker)} · ${p._count.votes} votes</p><h2>${escape(p.title)}</h2><p>${escape(p.thesis.slice(0, 240))}…</p><a href="${escape(base)}/pitches/${p.id}" style="color:#216cf0">Read the thesis and vote →</a></div>`).join("")}<p><a href="${escape(base)}/dashboard">Open Consensus</a></p><p style="font-size:12px;color:#657089">Paper investments only. <a href="${escape(base)}/account">Manage weekly email preferences</a> · <a href="{{{RESEND_UNSUBSCRIBE_URL}}}">Unsubscribe</a></p></div></body></html>`;
+    const html = renderDigestEmail(base, pitches);
     const text = `IFBS Consensus · This week’s investment ideas\n\n${pitches.map((p) => `${plain(p.ticker)}: ${plain(p.title)}\n${plain(p.thesis.slice(0, 240))}…\n${base}/pitches/${p.id}`).join("\n\n")}\n\nOpen Consensus: ${base}/dashboard\nManage preferences: ${base}/account\nUnsubscribe: {{{RESEND_UNSUBSCRIBE_URL}}}`;
     if (!broadcastId) {
       broadcastId = (
