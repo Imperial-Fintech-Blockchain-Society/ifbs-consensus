@@ -15,7 +15,9 @@ npm run db:migrate
 npm run dev
 ```
 
-Open http://localhost:3000. Create an account using an `@ic.ac.uk` or `@imperial.ac.uk` address. Passwords must contain at least 12 characters. The MVP validates the email domain; it does not verify mailbox ownership or use SSO.
+Open http://localhost:3000. Create an account using an `@ic.ac.uk` or `@imperial.ac.uk` address. Passwords must contain at least 12 characters. Signup sends a confirmation email through Resend. No user account or session is created until the member opens the one-time confirmation link; they are then signed in and redirected to the dashboard.
+
+Links expire after 24 hours. Submitting signup again sends a new link and invalidates the previous one (up to three requests per email per hour). Pending signups store only a password hash and token hash, and expired pending records are removed on subsequent signup requests. Existing accounts continue to work.
 
 ## Environment
 
@@ -28,8 +30,8 @@ Open http://localhost:3000. Create an account using an `@ic.ac.uk` or `@imperial
 | `CRON_SECRET` | At least 32 random characters. Scheduled requests must send `Authorization: Bearer <CRON_SECRET>`. | For scheduled jobs |
 | `COINGECKO_API_URL` | Defaults to `https://api.coingecko.com/api/v3`. | No |
 | `COINGECKO_API_KEY` | Optional Demo API key, sent through `x-cg-demo-api-key`. Keyless endpoints are supported; Demo keys improve reliability. | No |
-| `RESEND_API_KEY` | Resend API credential. | For digest delivery |
-| `EMAIL_FROM` | Sender on a domain verified in Resend, e.g. `IFBS Consensus <noreply@your-domain.com>`. | For digest delivery |
+| `RESEND_API_KEY` | Resend API credential. | For signup and digest delivery |
+| `EMAIL_FROM` | Sender on a domain verified in Resend, e.g. `IFBS Consensus <noreply@your-domain.com>`. | For signup and digest delivery |
 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | Not used by this implementation, which accesses PostgreSQL through Prisma and provides custom authentication. Existing values can remain. | No |
 
 Generate each secret separately with `openssl rand -hex 32`. Keep `.env` private. Only the public app URL has a `NEXT_PUBLIC_` prefix.
@@ -79,8 +81,8 @@ Use `/api/cron/monitor` and `/api/cron/digest` for the other jobs. Resolution pr
 2. Set the environment variables above. `NEXT_PUBLIC_APP_URL` must match the production origin; use a corresponding origin for each preview deployment you want to test. Keep secrets server-only.
 3. Configure a Supabase pooler `DATABASE_URL` for serverless requests and a direct/session-pooler `DIRECT_URL` for migrations.
 4. Apply migrations with `npm run db:migrate` against the production database before starting the deployment. The build generates Prisma but deliberately does not run database migrations.
-5. Deploy with the default `npm run build` command, then register a member account and check pitch creation and the portfolio.
-6. Verify your email sender in Resend, set `EMAIL_FROM`, and add the GitHub Actions secrets. Enable Actions on the default branch and run `resolve` and `monitor` manually once.
+5. Configure `RESEND_API_KEY`, a verified `EMAIL_FROM`, and the public `NEXT_PUBLIC_APP_URL` before accepting signups. Apply the `20261010120000_email_confirmation` migration. Deploy with the default `npm run build` command, then register a member account and check pitch creation and the portfolio.
+6. Add the GitHub Actions secrets. Enable Actions on the default branch and run `resolve` and `monitor` manually once.
 
 The code is deployable but does not contain Vercel account credentials or linked project configuration. The cron route’s maximum duration is 300 seconds; select a Vercel plan/runtime configuration that supports the duration required for your membership size.
 
@@ -95,7 +97,7 @@ npm audit --omit=dev
 npm run test:e2e
 ```
 
-The end-to-end script requires a database owner connection and installed Google Chrome. Set `PLAYWRIGHT_CHANNEL=chromium` to use a Playwright-managed Chromium installation. It creates a uniquely named `ifbs_test_*` database schema, runs migrations, launches a separate app on port 3001 and local CoinGecko/Resend mocks on ports 3012–3013, then removes its schema and records in `finally`. It never sends real emails or alters public application data. Screenshots are written to `/private/tmp/ifbs-screenshots`. It checks registration, login/logout, domain/origin restrictions, cookie flags, password hashes, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, rejection rules, TP/SL exits, portfolio P&L, digest opt-out/idempotency, RLS and responsive layout.
+The end-to-end script requires a database owner connection and installed Google Chrome. Set `PLAYWRIGHT_CHANNEL=chromium` to use a Playwright-managed Chromium installation. It creates a uniquely named `ifbs_test_*` database schema, runs migrations, launches a separate app on port 3001 and local CoinGecko/Resend mocks on ports 3012–3013, then removes its schema and records in `finally`. It never sends real emails or alters public application data. Screenshots are written to `/private/tmp/ifbs-screenshots`. It checks confirmation emails and fallback links, pending-account access, token expiry/replay/concurrent consumption, replacement links, delivery failure/retry, resend limits, login/logout, domain/origin restrictions, cookie flags, password hashes, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, rejection rules, TP/SL exits, portfolio P&L, digest opt-out/idempotency, RLS and responsive layout.
 
 The production dependency audit is clean. Some development lint dependencies currently have upstream audit findings with no compatible patch; they are not reachable through the deployed app. Do not use `npm audit fix --force`, which currently proposes downgrading Next.js tooling.
 

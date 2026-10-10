@@ -24,6 +24,8 @@ let price = 100;
 let stale = false;
 let unavailable = false;
 let emailsSent = 0;
+const confirmationLinks = new Map();
+let mailFailure = false;
 const market = createServer((req, res) => {
   res.setHeader("Content-Type", "application/json");
   if (unavailable) {
@@ -73,10 +75,28 @@ const market = createServer((req, res) => {
     res.end("{}");
   }
 });
-const mail = createServer((req, res) => {
+const mail = createServer(async (req, res) => {
   assert.equal(req.url, "/emails");
   assert.ok(req.headers["idempotency-key"]);
-  emailsSent++;
+  let body = "";
+  for await (const chunk of req) body += chunk;
+  const email = JSON.parse(body);
+  if (mailFailure) {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        message: "Mock delivery failure",
+        name: "application_error",
+      }),
+    );
+    return;
+  }
+  if (email.subject.startsWith("Confirm your email")) {
+    const link = email.text.match(/http:\/\/[^\s]+/)[0];
+    assert.ok(email.html.includes(`href="${link}"`));
+    assert.ok(email.html.includes("Confirm email address"));
+    confirmationLinks.set(email.to, link);
+  } else emailsSent++;
   res.setHeader("Content-Type", "application/json");
   res.end(JSON.stringify({ id: `test-email-${emailsSent}` }));
 });
@@ -215,9 +235,136 @@ try {
   await page.getByLabel("Your name").fill("Alex Morgan");
   await page.getByLabel("Imperial email address").fill("alex@ic.ac.uk");
   await page.getByLabel("Password", { exact: true }).fill(password);
-  await page.getByRole("button", { name: "Create your account" }).click();
+  await page.getByRole("button", { name: "Send confirmation email" }).click();
+  await page.getByRole("heading", { name: "Check your email" }).waitFor();
+  assert.equal(
+    await db.user.count(),
+    0,
+    "No account exists before confirmation",
+  );
+  assert.equal(
+    (await context.cookies()).some((c) => c.name === "ifbs_session"),
+    false,
+  );
+  assert.equal(
+    (
+      await anonymous.post("/api/auth/login", {
+        data: { email: "alex@ic.ac.uk", password },
+      })
+    ).status(),
+    401,
+    "Pending signups cannot log in",
+  );
+  const alexLink = confirmationLinks.get("alex@ic.ac.uk");
+  const alexToken = new URL(alexLink).searchParams.get("token");
+  const pending = await db.pendingSignup.findUnique({
+    where: { email: "alex@ic.ac.uk" },
+  });
+  assert.notEqual(pending.tokenHash, alexToken);
+  assert.notEqual(pending.passwordHash, password);
+  assert.equal((await anonymous.get(alexLink)).status(), 200);
+  assert.equal(
+    await db.user.count(),
+    0,
+    "Fetching the email link alone does not create an account",
+  );
+  await page.goto(alexLink);
   await page.waitForURL("**/dashboard");
   await page.getByRole("heading", { name: "Welcome back, Alex." }).waitFor();
+  assert.equal(await db.pendingSignup.count(), 0);
+  assert.equal(
+    (
+      await anonymous.post("/api/auth/verify", { data: { token: alexToken } })
+    ).status(),
+    400,
+  );
+  assert.equal(
+    (
+      await anonymous.post("/api/auth/verify", { data: { token: "invalid" } })
+    ).status(),
+    400,
+  );
+  const signupChecks = await playwrightRequest.newContext({
+    baseURL: base,
+    extraHTTPHeaders: { ...headers, "X-Forwarded-For": "192.0.2.100" },
+  });
+  const retryData = {
+    name: "Pending Member",
+    email: "pending@ic.ac.uk",
+    password,
+  };
+  assert.equal(
+    (
+      await signupChecks.post("/api/auth/register", { data: retryData })
+    ).status(),
+    202,
+  );
+  const oldToken = new URL(
+    confirmationLinks.get(retryData.email),
+  ).searchParams.get("token");
+  assert.equal(
+    (
+      await signupChecks.post("/api/auth/register", { data: retryData })
+    ).status(),
+    202,
+  );
+  const newToken = new URL(
+    confirmationLinks.get(retryData.email),
+  ).searchParams.get("token");
+  assert.notEqual(oldToken, newToken);
+  assert.equal(
+    (
+      await signupChecks.post("/api/auth/verify", { data: { token: oldToken } })
+    ).status(),
+    400,
+  );
+  await db.pendingSignup.update({
+    where: { email: retryData.email },
+    data: { expiresAt: new Date(0) },
+  });
+  assert.equal(
+    (
+      await signupChecks.post("/api/auth/verify", { data: { token: newToken } })
+    ).status(),
+    400,
+  );
+  assert.equal(await db.user.count({ where: { email: retryData.email } }), 0);
+  const failedData = { ...retryData, email: "delivery@ic.ac.uk" };
+  mailFailure = true;
+  assert.equal(
+    (
+      await signupChecks.post("/api/auth/register", { data: failedData })
+    ).status(),
+    503,
+  );
+  mailFailure = false;
+  assert.equal(
+    await db.pendingSignup.count({ where: { email: failedData.email } }),
+    0,
+  );
+  assert.equal(await db.user.count({ where: { email: failedData.email } }), 0);
+  assert.equal(
+    (
+      await signupChecks.post("/api/auth/register", { data: failedData })
+    ).status(),
+    202,
+  );
+  assert.equal(
+    (
+      await signupChecks.post("/api/auth/register", { data: retryData })
+    ).status(),
+    202,
+  );
+  assert.equal(
+    (
+      await signupChecks.post("/api/auth/register", { data: retryData })
+    ).status(),
+    429,
+  );
+  await db.pendingSignup.deleteMany({
+    where: { email: { in: [retryData.email, failedData.email] } },
+  });
+  await signupChecks.dispose();
   await page.getByRole("button", { name: "Open navigation" }).click();
   await page.screenshot({
     path: `${artifacts}/navigation-mobile.png`,
@@ -304,7 +451,7 @@ try {
   for (let n = 2; n <= 6; n++) {
     const client = await playwrightRequest.newContext({
       baseURL: base,
-      extraHTTPHeaders: headers,
+      extraHTTPHeaders: { ...headers, "X-Forwarded-For": `192.0.2.${n}` },
     });
     clients.push(client);
     assert.equal(
@@ -317,8 +464,16 @@ try {
           },
         })
       ).status(),
-      201,
+      202,
     );
+    const token = new URL(
+      confirmationLinks.get(`member${n}@imperial.ac.uk`),
+    ).searchParams.get("token");
+    const confirmations = await Promise.all([
+      client.post("/api/auth/verify", { data: { token } }),
+      client.post("/api/auth/verify", { data: { token } }),
+    ]);
+    assert.deepEqual(confirmations.map((r) => r.status()).sort(), [200, 400]);
     voterIds.push(
       (
         await db.user.findUnique({
@@ -881,7 +1036,7 @@ try {
     `SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname = '${schema}' AND tablename <> '_prisma_migrations'`,
   );
   assert.ok(
-    rows.length === 10 && rows.every((row) => row.rowsecurity),
+    rows.length === 11 && rows.every((row) => row.rowsecurity),
     "All app tables should enable RLS",
   );
   await context.request.post(`${base}/api/auth/logout`, { headers });
@@ -922,7 +1077,7 @@ try {
   });
   assert.deepEqual(browserErrors, [], "Browser should have no uncaught errors");
   console.log(
-    "PASS: registration, domain/CSRF protection, login/logout, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, quorum/tie rejection, TP/SL execution, portfolio P&L, public fund charts/valuations, snapshot integrity, digest preferences/idempotency, RLS, and mobile layouts.",
+    "PASS: email confirmation, pending-account access, expiry/replay/concurrent confirmation, resend limits, delivery retry, domain/CSRF protection, login/logout, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, quorum/tie rejection, TP/SL execution, portfolio P&L, public fund charts/valuations, snapshot integrity, digest preferences/idempotency, RLS, and mobile layouts.",
   );
   console.log(`Screenshots: ${artifacts}`);
 } finally {

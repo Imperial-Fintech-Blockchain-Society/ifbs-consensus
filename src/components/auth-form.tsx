@@ -9,6 +9,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [visible, setVisible] = useState(false);
+  const [confirmationEmail, setConfirmationEmail] = useState("");
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -22,6 +23,10 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
+      if (register) {
+        setConfirmationEmail(String(data.email));
+        return;
+      }
       router.push("/dashboard");
       router.refresh();
     } catch (err) {
@@ -32,6 +37,34 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       setBusy(false);
     }
   }
+  if (confirmationEmail)
+    return (
+      <div className="space-y-5" role="status">
+        <h2 className="text-xl font-bold text-navy">Check your email</h2>
+        <p className="text-sm leading-6 text-slate-600">
+          We’ve sent a confirmation link to <strong>{confirmationEmail}</strong>
+          . Click it to confirm your email, create your account, and open your
+          dashboard.
+        </p>
+        <p className="text-sm leading-6 text-slate-500">
+          The link expires in 24 hours. Check your spam folder if it hasn’t
+          arrived.
+        </p>
+        <button
+          type="button"
+          className="btn w-full"
+          onClick={() => setConfirmationEmail("")}
+        >
+          Try again or use another email
+        </button>
+        <p className="text-center text-sm text-slate-500">
+          Already confirmed?{" "}
+          <Link href="/login" className="font-semibold text-brand">
+            Log in
+          </Link>
+        </p>
+      </div>
+    );
   return (
     <form onSubmit={submit} className="space-y-5">
       {register && (
@@ -131,7 +164,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         {busy
           ? "Please wait…"
           : register
-            ? "Create your account"
+            ? "Send confirmation email"
             : "Log in to Consensus"}
         <ArrowRight size={17} />
       </button>

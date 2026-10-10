@@ -1,4 +1,4 @@
-1. DONE Add Google Analytics
+1. DONE Add Vercel Analytics
 2. DONE Get domain name from namecheap
 3. DONE Verify domain on Resend
 4. DONE Add Privacy Policy and T&amp;C

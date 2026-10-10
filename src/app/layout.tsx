@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 export const metadata: Metadata = {
   title: {
@@ -20,24 +21,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        {/* Google tag (gtag.js) */}
-        {/* Use the supplied tag directly to keep it in the document head. */}
-        {/* eslint-disable-next-line @next/next/next-script-for-ga */}
-        <script
-          async
-          src="https://www.googletagmanager.com/gtag/js?id=G-CH5GMLDV6F"
-        />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `window.dataLayer = window.dataLayer || [];
-function gtag(){dataLayer.push(arguments);}
-gtag('js', new Date());
-gtag('config', 'G-CH5GMLDV6F');`,
-          }}
-        />
-      </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }

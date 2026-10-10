@@ -44,7 +44,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           </h1>
           <p className="mb-8 mt-3 text-sm leading-6 text-slate-500">
             {mode === "register"
-              ? "Create your account and make your first contribution to the fund."
+              ? "Confirm your Imperial email to create your account and join the fund."
               : "Log in to explore the latest ideas and follow the fund."}
           </p>
           <AuthForm mode={mode} />

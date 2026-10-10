@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { hash, compare } from "bcryptjs";
+import { compare } from "bcryptjs";
+import { confirmSignup, requestSignup } from "@/lib/signup";
 import { db } from "@/lib/db";
 import { createSession, clearSession } from "@/lib/auth";
 import { registerSchema, loginSchema } from "@/lib/rules";
@@ -27,15 +28,20 @@ export async function POST(
       const data = registerSchema.parse(await jsonBody(request));
       if (Buffer.byteLength(data.password, "utf8") > 72)
         throw new HttpError(400, "Password must be at most 72 UTF-8 bytes.");
-      const user = await db.user.create({
-        data: {
-          name: data.name,
-          email: data.email,
-          passwordHash: await hash(data.password, 12),
-        },
-      });
+      await rateLimit(`signup:${data.email}`, 3, 3600);
+      await requestSignup(data);
+      return NextResponse.json(
+        { ok: true, verificationRequired: true },
+        { status: 202 },
+      );
+    }
+    if (action === "verify") {
+      const data = await jsonBody(request);
+      const user = await confirmSignup(
+        typeof data?.token === "string" ? data.token : "",
+      );
       await createSession(user.id);
-      return NextResponse.json({ ok: true }, { status: 201 });
+      return NextResponse.json({ ok: true });
     }
     if (action === "login") {
       const data = loginSchema.parse(await jsonBody(request));
