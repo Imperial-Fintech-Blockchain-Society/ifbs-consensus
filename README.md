@@ -30,7 +30,8 @@ Links expire after 24 hours. Submitting signup again sends a new link and invali
 | `CRON_SECRET` | At least 32 random characters. Scheduled requests must send `Authorization: Bearer <CRON_SECRET>`. | For scheduled jobs |
 | `COINGECKO_API_URL` | Defaults to `https://api.coingecko.com/api/v3`. | No |
 | `COINGECKO_API_KEY` | Optional Demo API key, sent through `x-cg-demo-api-key`. Keyless endpoints are supported; Demo keys improve reliability. | No |
-| `RESEND_API_KEY` | Resend API credential. | For signup and digest delivery |
+| `RESEND_API_KEY` | Full-access Resend API credential (contacts, segments and broadcasts require more than sending-only access). | For signup and digest delivery |
+| `RESEND_DIGEST_SEGMENT_ID` | Optional dedicated app-managed segment ID. If unset, the app finds or creates its own segment, scoped to the app origin. Segment membership is synchronized before every send; use a segment dedicated to this app. | No |
 | `EMAIL_FROM` | Sender on a domain verified in Resend, e.g. `IFBS Consensus <noreply@your-domain.com>`. | For signup and digest delivery |
 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | Not used by this implementation, which accesses PostgreSQL through Prisma and provides custom authentication. Existing values can remain. | No |
 
@@ -52,7 +53,7 @@ Generate each secret separately with `openssl rand -hex 32`. Keep `.env` private
 - TP/SL exits remain active during close voting. If a position closes first, its pending proposal is cancelled. Scheduler retries cannot close or credit the same position twice, and unavailable prices leave an approved close proposal pending for retry with voting closed.
 - Scheduled monitoring closes positions at the observed price if a take-profit or stop-loss threshold is crossed. Checks are periodic; no guarantee of filling at the exact threshold. The simulation omits fees and slippage.
 - Member track records show published/passed pitches, contributed votes, and realized performance from their own closed pitches.
-- Weekly HTML digest of new active pitches, with member opt-out and per-week/per-member delivery tracking. Resend idempotency keys protect overlapping retries.
+- Weekly HTML and plain-text digest of new active pitches via Resend Broadcasts. The app retrieves or creates one draft per UTC week, refreshes its contents, then submits it to a dedicated member segment. A database lease serializes overlapping calls; retries recover existing drafts and never resend queued, scheduled or sent broadcasts.
 
 Coin IDs identify assets uniquely, since tickers can be ambiguous. Execution requires a positive price, a timestamp no more than five minutes old, and price precision supported by the database (minimum $0.0000000001). Failed price requests leave approved pitches pending for retry. Voting remains closed after the deadline. Duplicate scheduler requests are safe: row locks and unique constraints prevent duplicate trades, and conditional updates prevent a second close.
 
@@ -73,7 +74,13 @@ curl --fail-with-body -X POST \
   "$NEXT_PUBLIC_APP_URL/api/cron/resolve"
 ```
 
-Use `/api/cron/monitor` and `/api/cron/digest` for the other jobs. Resolution processes expired close votes first, then expired and queued pitches, so released cash can fund queued entries in the same run. Voting closes at its deadline; scheduled execution can occur later. Each run processes up to 100 close proposals and 100 pitches. Digest delivery is paced; large memberships should use a queue.
+Use `/api/cron/monitor` and `/api/cron/digest` for the other jobs. Resolution processes expired close votes first, then expired and queued pitches, so released cash can fund queued entries in the same run. Voting closes at its deadline; scheduled execution can occur later. Each run processes up to 100 close proposals and 100 pitches. Contact synchronization is paced; Resend handles broadcast delivery queues.
+
+The digest uses Resend Marketing/Broadcasts, while signup confirmation emails remain transactional. Contacts are synchronized from confirmed user accounts with `digestEnabled: true` before submission. App opt-outs and non-members are removed from the dedicated segment without deleting their Resend contacts. Existing Resend unsubscribes are never reversed; both HTML and plain text include `{{{RESEND_UNSUBSCRIBE_URL}}}`. Pending signups are never imported.
+
+Digest responses contain `broadcastId` and `queued` (the number of eligible recipients submitted, not a delivery receipt), or a `skipped` reason. A sent broadcast cannot be edited and reused, so each new week gets a new draft. Retries in the same week reuse the draft and refresh it with the latest active pitches. If an API call fails, the endpoint returns 503; retrying resumes safely. For large first-time imports, contact sync stops before the route timeout and returns 503 so another call can continue. An interrupted invocation's lease expires after ten minutes. Legacy transactional digest records remain effective to prevent duplicate delivery during the migration week.
+
+Apply the `20261010140000_digest_broadcasts` migration with `npm run db:migrate` before deploying. The Resend key must have full access. The app can automatically create its dedicated segment; alternatively set `RESEND_DIGEST_SEGMENT_ID` to an existing dedicated segment. See [Resend Broadcasts](https://resend.com/docs/api-reference/broadcasts/create-broadcast).
 
 ## Deploy on Vercel
 
@@ -97,7 +104,7 @@ npm audit --omit=dev
 npm run test:e2e
 ```
 
-The end-to-end script requires a database owner connection and installed Google Chrome. Set `PLAYWRIGHT_CHANNEL=chromium` to use a Playwright-managed Chromium installation. It creates a uniquely named `ifbs_test_*` database schema, runs migrations, launches a separate app on port 3001 and local CoinGecko/Resend mocks on ports 3012–3013, then removes its schema and records in `finally`. It never sends real emails or alters public application data. Screenshots are written to `/private/tmp/ifbs-screenshots`. It checks confirmation emails and fallback links, pending-account access, token expiry/replay/concurrent consumption, replacement links, delivery failure/retry, resend limits, login/logout, domain/origin restrictions, cookie flags, password hashes, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, rejection rules, TP/SL exits, portfolio P&L, digest opt-out/idempotency, RLS and responsive layout.
+The end-to-end script requires a database owner connection and installed Google Chrome. Set `PLAYWRIGHT_CHANNEL=chromium` to use a Playwright-managed Chromium installation. It creates a uniquely named `ifbs_test_*` database schema, runs migrations, launches a separate app on port 3001 and local CoinGecko/Resend mocks on ports 3012–3013, then removes its schema and records in `finally`. It never sends real emails or alters public application data. Screenshots are written to `/private/tmp/ifbs-screenshots`. It checks confirmation emails and fallback links, pending-account access, token expiry/replay/concurrent consumption, replacement links, delivery failure/retry, resend limits, login/logout, domain/origin restrictions, cookie flags, password hashes, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, rejection rules, TP/SL exits, portfolio P&L, broadcast creation/recovery/update/send, concurrent submission, recipient pagination, opt-outs/unsubscribes, RLS and responsive layout.
 
 The production dependency audit is clean. Some development lint dependencies currently have upstream audit findings with no compatible patch; they are not reachable through the deployed app. Do not use `npm audit fix --force`, which currently proposes downgrading Next.js tooling.
 

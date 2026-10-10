@@ -165,3 +165,12 @@ model DigestDelivery {
 
   @@unique([week, userId])
 }
+
+model DigestBroadcast {
+  week        String    @id
+  broadcastId String?   @unique
+  segmentId   String?
+  submittedAt DateTime?
+  lockOwner   String?
+  lockedUntil DateTime?
+}

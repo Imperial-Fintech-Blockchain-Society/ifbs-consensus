@@ -26,6 +26,44 @@ let unavailable = false;
 let emailsSent = 0;
 const confirmationLinks = new Map();
 let mailFailure = false;
+let failBroadcastUpdate = true;
+let broadcastsCreated = 0;
+let broadcastsSent = 0;
+let broadcastsUpdated = 0;
+const broadcasts = new Map();
+const segments = new Map();
+const contacts = new Map([
+  [
+    "opted-out",
+    { id: "opted-out", email: "alex@ic.ac.uk", unsubscribed: false },
+  ],
+  [
+    "outsider",
+    { id: "outsider", email: "outsider@ic.ac.uk", unsubscribed: false },
+  ],
+  [
+    "unsubscribed",
+    { id: "unsubscribed", email: "member2@imperial.ac.uk", unsubscribed: true },
+  ],
+  [
+    "existing-member",
+    {
+      id: "existing-member",
+      email: "member3@imperial.ac.uk",
+      unsubscribed: false,
+    },
+  ],
+]);
+const segmentMembers = new Set();
+function paginate(list, url) {
+  const after = url.searchParams.get("after");
+  const start = after ? list.findIndex((item) => item.id === after) + 1 : 0;
+  return {
+    object: "list",
+    data: list.slice(start, start + 2),
+    has_more: start + 2 < list.length,
+  };
+}
 const market = createServer((req, res) => {
   res.setHeader("Content-Type", "application/json");
   if (unavailable) {
@@ -76,11 +114,101 @@ const market = createServer((req, res) => {
   }
 });
 const mail = createServer(async (req, res) => {
-  assert.equal(req.url, "/emails");
-  assert.ok(req.headers["idempotency-key"]);
   let body = "";
   for await (const chunk of req) body += chunk;
-  const email = JSON.parse(body);
+  const email = body ? JSON.parse(body) : {};
+  const url = new URL(req.url, "http://localhost:3013");
+  const parts = url.pathname.split("/").filter(Boolean);
+  res.setHeader("Content-Type", "application/json");
+  const reply = (data) => res.end(JSON.stringify(data));
+  if (parts[0] === "segments") {
+    if (req.method === "POST") {
+      const segment = { id: "digest-segment", name: email.name };
+      segments.set(segment.id, segment);
+      // Stale membership must be removed before the app sends the digest.
+      segmentMembers.add("opted-out");
+      segmentMembers.add("outsider");
+      segmentMembers.add("unsubscribed");
+      return reply(segment);
+    }
+    if (!parts[1]) return reply(paginate([...segments.values()], url));
+    if (parts[2] === "contacts")
+      return reply(
+        paginate(
+          [...contacts.values()].filter((c) => segmentMembers.has(c.id)),
+          url,
+        ),
+      );
+    return reply(segments.get(parts[1]));
+  }
+  if (parts[0] === "contacts") {
+    if (parts[2] === "segments") {
+      assert.equal(parts[3], "digest-segment");
+      if (req.method === "POST") segmentMembers.add(parts[1]);
+      else if (req.method === "DELETE") segmentMembers.delete(parts[1]);
+      return reply({ id: parts[1] });
+    }
+    if (req.method === "GET")
+      return reply(paginate([...contacts.values()], url));
+    if (req.method === "POST") {
+      assert.ok(![...contacts.values()].some((c) => c.email === email.email));
+      const contact = {
+        id: `contact-${contacts.size}`,
+        email: email.email,
+        unsubscribed: false,
+      };
+      contacts.set(contact.id, contact);
+      assert.deepEqual(email.segments, [{ id: "digest-segment" }]);
+      segmentMembers.add(contact.id);
+      return reply(contact);
+    }
+  }
+  if (parts[0] === "broadcasts") {
+    if (!parts[1] && req.method === "GET")
+      return reply(paginate([...broadcasts.values()], url));
+    if (!parts[1] && req.method === "POST") {
+      assert.equal(email.segment_id, "digest-segment");
+      assert.notEqual(email.send, true);
+      const broadcast = {
+        ...email,
+        id: `broadcast-${++broadcastsCreated}`,
+        status: "draft",
+      };
+      broadcasts.set(broadcast.id, broadcast);
+      return reply({ id: broadcast.id });
+    }
+    const broadcast = broadcasts.get(parts[1]);
+    assert.ok(broadcast);
+    if (req.method === "GET") return reply(broadcast);
+    if (req.method === "PATCH") {
+      assert.equal(broadcast.status, "draft");
+      if (failBroadcastUpdate) {
+        failBroadcastUpdate = false;
+        res.writeHead(500);
+        return reply({
+          name: "application_error",
+          message: "Mock update failure",
+        });
+      }
+      assert.ok(email.html.includes("{{{RESEND_UNSUBSCRIBE_URL}}}"));
+      assert.ok(email.text.includes("{{{RESEND_UNSUBSCRIBE_URL}}}"));
+      Object.assign(broadcast, email);
+      broadcastsUpdated++;
+      return reply({ id: broadcast.id });
+    }
+    if (parts[2] === "send") {
+      assert.ok(broadcastsUpdated > 0, "Update must happen before send");
+      assert.equal(broadcast.status, "draft");
+      broadcast.status = "queued";
+      broadcastsSent++;
+      emailsSent += [...contacts.values()].filter(
+        (c) => segmentMembers.has(c.id) && !c.unsubscribed,
+      ).length;
+      return reply({ id: broadcast.id });
+    }
+  }
+  assert.equal(req.url, "/emails");
+  assert.ok(req.headers["idempotency-key"]);
   if (mailFailure) {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(
@@ -110,6 +238,7 @@ const env = {
   RESEND_API_KEY: "re_test_mock",
   RESEND_BASE_URL: "http://localhost:3013",
   EMAIL_FROM: "IFBS <test@example.com>",
+  RESEND_DIGEST_SEGMENT_ID: "",
   IFBS_BUILD_DIR: ".next-e2e",
   NEXT_TELEMETRY_DISABLED: "1",
 };
@@ -1022,21 +1151,68 @@ try {
     (
       await anonymous.post("/api/cron/digest", { headers: cronHeaders })
     ).status(),
-    200,
+    503,
   );
-  assert.equal(emailsSent, 5, "Opted-out members should not receive email");
+  assert.equal(broadcastsCreated, 1);
+  assert.equal(
+    broadcastsSent,
+    0,
+    "Failed updates must not send a stale digest",
+  );
+  const campaign = await db.digestBroadcast.findFirst();
+  assert.ok(campaign.broadcastId);
+  assert.equal(campaign.lockOwner, null, "Failures release the digest lease");
+  // Simulate losing the saved ID: recover the remote draft by its stable name.
+  await db.digestBroadcast.update({
+    where: { week: campaign.week },
+    data: { broadcastId: null },
+  });
+  await db.pitch.update({
+    where: { id: digestPitch.id },
+    data: { title: "Fresh digest body after a failed draft update" },
+  });
+  const digestRuns = await Promise.all([
+    anonymous.post("/api/cron/digest", { headers: cronHeaders }),
+    anonymous.post("/api/cron/digest", { headers: cronHeaders }),
+  ]);
+  assert.deepEqual(digestRuns.map((r) => r.status()).sort(), [200, 503]);
+  assert.equal(
+    (await digestRuns.find((r) => r.status() === 200).json()).queued,
+    4,
+  );
+  assert.equal(broadcastsCreated, 1, "Retry reuses the remote draft");
+  assert.equal(broadcastsSent, 1);
+  assert.ok(
+    [...broadcasts.values()][0].html.includes(
+      "Fresh digest body after a failed draft update",
+    ),
+  );
+  assert.equal(
+    emailsSent,
+    4,
+    "App opt-outs and Resend unsubscribes are excluded",
+  );
+  assert.equal(segmentMembers.has("opted-out"), false);
+  assert.equal(segmentMembers.has("outsider"), false);
+  assert.equal(segmentMembers.has("unsubscribed"), false);
+  assert.equal(contacts.get("unsubscribed").unsubscribed, true);
+  assert.equal(
+    (await db.digestBroadcast.findFirst()).broadcastId,
+    campaign.broadcastId,
+  );
   assert.equal(
     (
       await anonymous.post("/api/cron/digest", { headers: cronHeaders })
     ).status(),
     200,
   );
-  assert.equal(emailsSent, 5, "A repeated digest should not resend");
+  assert.equal(emailsSent, 4, "A repeated digest should not resend");
+  assert.equal(broadcastsSent, 1);
   const rows = await db.$queryRawUnsafe(
     `SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname = '${schema}' AND tablename <> '_prisma_migrations'`,
   );
   assert.ok(
-    rows.length === 11 && rows.every((row) => row.rowsecurity),
+    rows.length === 12 && rows.every((row) => row.rowsecurity),
     "All app tables should enable RLS",
   );
   await context.request.post(`${base}/api/auth/logout`, { headers });
