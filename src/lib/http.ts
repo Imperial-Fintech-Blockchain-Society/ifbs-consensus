@@ -44,6 +44,7 @@ export function errorResponse(error: unknown) {
 }
 const trustedOrigins = new Set([
   "https://ifbsconsensus.com",
+  "https://www.ifbsconsensus.com",
   "https://ifbs-consensus.vercel.app",
   "http://localhost:3000",
   "http://localhost:3001",

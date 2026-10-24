@@ -9,6 +9,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 const origins = [
   "https://ifbsconsensus.com",
+  "https://www.ifbsconsensus.com",
   "https://ifbs-consensus.vercel.app",
   "http://localhost:3000",
   "http://localhost:3001",
@@ -31,7 +32,7 @@ describe("Website request origins", () => {
     },
   );
 
-  it("accepts the four website addresses without a configured canonical URL", () => {
+  it("accepts the trusted website addresses without a configured canonical URL", () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
     for (const origin of origins)
       expect(() => sameOrigin(request(origin))).not.toThrow();

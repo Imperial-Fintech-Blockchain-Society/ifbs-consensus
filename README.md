@@ -25,7 +25,7 @@ Links expire after 24 hours. Submitting signup again sends a new link and invali
 | --- | --- | --- |
 | `VERCEL_DB_URL` | The single PostgreSQL connection string used by the app, Prisma CLI, migrations, Studio, and end-to-end tests. Use the Supabase session pooler (port 5432) so the same URL supports IPv4 runtime connections and migrations. URL-encode special characters in the password. | Yes |
 | `JWT_SECRET` | At least 32 random characters for signing member sessions. | Yes |
-| `NEXT_PUBLIC_APP_URL` | Canonical app URL used for email links and digest identity. Its origin is also trusted for website actions. The app always accepts `https://ifbsconsensus.com`, `https://ifbs-consensus.vercel.app`, `http://localhost:3000`, and `http://localhost:3001`. | Yes |
+| `NEXT_PUBLIC_APP_URL` | Canonical app URL used for email links and digest identity. Its origin is also trusted for website actions. The app always accepts `https://ifbsconsensus.com`, `https://www.ifbsconsensus.com`, `https://ifbs-consensus.vercel.app`, `http://localhost:3000`, and `http://localhost:3001`. | Yes |
 | `CRON_SECRET` | At least 32 random characters. Scheduled requests must send `Authorization: Bearer <CRON_SECRET>`. | For scheduled jobs |
 | `COINGECKO_API_URL` | Defaults to `https://api.coingecko.com/api/v3`. | No |
 | `COINGECKO_API_KEY` | Optional Demo API key, sent through `x-cg-demo-api-key`. Keyless endpoints are supported; Demo keys improve reliability. | No |
@@ -86,7 +86,7 @@ Apply the `20261010140000_digest_broadcasts` and `20261010150000_digest_generati
 ## Deploy on Vercel
 
 1. Import this GitHub repository into Vercel and select the Next.js framework preset. Choose Node.js 24.
-2. Set the environment variables above. Set `NEXT_PUBLIC_APP_URL` to the canonical production URL for email links. Both production domains and localhost ports 3000/3001 are already trusted for website actions; no extra origin variable is needed. Keep secrets server-only.
+2. Set the environment variables above. Set `NEXT_PUBLIC_APP_URL` to the canonical production URL for email links. The production domains (including www) and localhost ports 3000/3001 are already trusted for website actions; no extra origin variable is needed. Keep secrets server-only.
 3. Set `VERCEL_DB_URL` to your Supabase session-pooler connection string (port 5432), both locally and in Vercel. All database commands use this one variable.
 4. Apply migrations with `npm run db:migrate` against the production database before starting the deployment. The build generates Prisma but deliberately does not run database migrations.
 5. Configure `RESEND_API_KEY`, a verified `EMAIL_FROM`, and the public `NEXT_PUBLIC_APP_URL` before accepting signups. Apply the `20261010120000_email_confirmation` migration. Deploy with the default `npm run build` command, then register a member account and check pitch creation and the portfolio.
