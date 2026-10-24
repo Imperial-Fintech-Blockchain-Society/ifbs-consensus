@@ -71,6 +71,7 @@ export type PitchSummary = {
   votes: { decision: boolean }[];
   quorum: number;
   allocation: number;
+  stopLossPercent: number | null;
 };
 export function PitchCard({ pitch }: { pitch: PitchSummary }) {
   const agree = pitch.votes.filter((v) => v.decision).length;
@@ -101,6 +102,11 @@ export function PitchCard({ pitch }: { pitch: PitchSummary }) {
         {pitch.thesis.replace(/[#*_`]/g, "")}
       </p>
       <div className="mb-5 flex flex-wrap gap-4 text-xs">
+        <span className="text-slate-500">
+          {pitch.stopLossPercent === null
+            ? "Stop loss unavailable"
+            : `↘ SL −${pitch.stopLossPercent}%`}
+        </span>
         <span className="text-slate-500">{money(pitch.allocation)}</span>
       </div>
       <div className="mt-auto">

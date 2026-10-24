@@ -14,13 +14,24 @@ The resolver uses the USD quote available when execution occurs, then calculates
 
 ```text
 Quantity = investment amount / entry price
+Stop price = entry price × (1 − stop-loss percentage / 100)
 ```
 
-For example, **$10,000 invested at $100 per token** creates a position holding **100 tokens**.
+For example, **$10,000 invested at $100 per token** with a **10% Stop Loss** creates a position holding **100 tokens**, with a **$90 stop price**.
 
 The app creates an `OPEN` position, subtracts the investment from cash, adds it to allocated capital, and marks the pitch `PASSED`. These changes happen together in a transaction. Row locks and a unique position-per-pitch constraint prevent duplicate investments.
 
 Code: [pitch creation](src/app/api/pitches/route.ts), [voting deadline](src/app/api/pitches/[id]/votes/route.ts), [approval rules](src/lib/rules.ts), [execution and queuing](src/lib/engine.ts) (`resolvePitches`).
+
+## Closing at Stop Loss
+
+New pitches require a Stop Loss between **5% and 20%**, defaulting to **10%**. The monitor closes an open position when a fresh observed market price is at or below its stop price. Execution uses the observed price, which may be below the stop after a gap. Checks are periodic and do not guarantee execution at the stop. A price increase never closes a position automatically.
+
+Stop Loss remains active while a closing vote is pending. If monitoring closes the position first, its pending proposal is cancelled. Closing and fund updates use the same locked transaction as vote-based exits, so concurrent jobs cannot credit proceeds twice.
+
+Historical Stop Loss values deleted by the previous migration remain unavailable and do not trigger automatic exits. The app does not invent replacements.
+
+Code: [monitoring](src/lib/engine.ts) (`monitorPositions`), [threshold comparison](src/lib/rules.ts) (`exitReason`).
 
 ## Closing through a member vote
 
@@ -28,7 +39,7 @@ A member can announce a closing vote from an open position and explain why it sh
 
 After the deadline, a **strict majority of votes cast** approves closing; no five-vote quorum applies. Ties and ballots with no votes leave the position open. A rejected proposal allows members to announce another closing vote.
 
-An approved vote is the only way to close an investment. Market price changes never close positions automatically. The resolver closes the entire position at the **observed market quote** after voting ends. Invalid or stale prices leave an approved proposal pending for retry, with voting closed.
+Members can also close an investment through an approved vote. The resolver closes the entire position at the **observed market quote** after voting ends. Invalid or stale prices leave an approved proposal pending for retry, with voting closed.
 
 On closing, the app calculates `proceeds = exit price × quantity`, rounded to cents. It records the exit price, time, and reason; returns the proceeds to cash; and releases the original allocation. Locks and an `OPEN` status check prevent proceeds being credited twice.
 
@@ -58,7 +69,7 @@ Return includes **realized gains and losses through cash**, and **unrealized gai
 | Token valued at $120 | $90,000 | $12,000 | $102,000 | +2% |
 | Closed at $130 | $103,000 | $0 | $103,000 | +3% |
 
-Alternatively, an approved closing vote executing at $90 leaves **$99,000 cash and a −1% fund return**. The fund return reflects the investment's size: a 30% gain on a $10,000 position adds 3% to a $100,000 fund.
+Alternatively, a Stop Loss exit observed at $90 leaves **$99,000 cash and a −1% fund return**. The fund return reflects the investment's size: a 30% gain on a $10,000 position adds 3% to a $100,000 fund.
 
 The pie chart shows current USD weights. The line chart shows percentage return against starting capital, using saved valuations plus the latest displayed valuation. Its points show timestamps, fund values, and returns; connecting lines do not represent recorded prices between observations.
 
@@ -69,7 +80,7 @@ Code: [public data loading and snapshots](src/lib/public-fund.ts), [holding valu
 ## Timing and price reliability
 
 - The [scheduled workflow](.github/workflows/consensus-jobs.yml) is configured to run `resolve`, then `monitor`, every **ten minutes**. It requires a working deployment, enabled workflow, and correct `APP_URL` and `CRON_SECRET` secrets.
-- Within resolution, closing votes run before pitch investments, so released cash can fund queued pitches in the same run. If resolution keeps failing after retries, the workflow stops before monitoring.
+- Within resolution, closing votes run before pitch investments, so released cash can fund queued pitches in the same run. Cash released by Stop Loss monitoring is available on the next resolver run. If resolution keeps failing after retries, the workflow stops before monitoring.
 - The public page refreshes every **60 seconds**. Valuation quotes and the public API response can also be cached for 60 seconds.
 - Execution quotes must be finite, at least **$0.0000000001**, no more than **five minutes old**, and no more than **one minute into the future**.
 - If any open holding lacks a valid current quote, fund value, return, and pie allocation are unavailable. Existing history remains visible, and no incomplete snapshot is saved.

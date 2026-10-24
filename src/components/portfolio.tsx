@@ -24,6 +24,7 @@ export type PositionData = {
   allocation: number;
   quantity: number;
   entryPrice: number;
+  stopPrice: number | null;
   entryTime: string;
   closePrice: number | null;
   closeTime: string | null;
@@ -275,7 +276,9 @@ export function Portfolio({
                       <td className="px-5 py-5 text-[10px]">
                         {p.status === "OPEN" ? (
                           <p className="text-slate-500">
-                            Closing vote required
+                            {p.stopPrice === null
+                              ? "Stop loss unavailable"
+                              : `SL ${money(p.stopPrice)}`}
                           </p>
                         ) : (
                           <>

@@ -5,6 +5,7 @@ import {
   pitchSchema,
   voteSchema,
   passes,
+  exitReason,
   pnl,
   closePasses,
   closeProposalSchema,
@@ -52,11 +53,12 @@ describe("Consensus decisions", () => {
       }).success,
     ).toBe(false);
   });
-  it("validates pitches without exit targets and protects coin identifiers", () => {
+  it("requires a stop loss, ignores take profit, and protects coin identifiers", () => {
     const valid = {
       coinId: "bitcoin",
       title: "A compelling Bitcoin thesis",
       thesis: "a".repeat(100),
+      stopLossPercent: 10,
     };
     expect(pitchSchema.safeParse(valid).success).toBe(true);
     expect(pitchSchema.parse(valid).allocation).toBe(10000);
@@ -66,7 +68,25 @@ describe("Consensus decisions", () => {
       stopLossPercent: 10,
     });
     expect(legacyPitch).not.toHaveProperty("takeProfitPercent");
-    expect(legacyPitch).not.toHaveProperty("stopLossPercent");
+    expect(legacyPitch.stopLossPercent).toBe(10);
+    for (const stopLossPercent of [
+      undefined,
+      null,
+      0,
+      -1,
+      1,
+      4.99,
+      20.01,
+      90,
+      100,
+    ])
+      expect(pitchSchema.safeParse({ ...valid, stopLossPercent }).success).toBe(
+        false,
+      );
+    for (const stopLossPercent of [5, 5.01, 10, 19.99, 20])
+      expect(pitchSchema.safeParse({ ...valid, stopLossPercent }).success).toBe(
+        true,
+      );
     expect(
       pitchSchema.parse({ ...valid, allocation: "2345.67" }).allocation,
     ).toBe(2345.67);
@@ -100,6 +120,13 @@ describe("Closing votes", () => {
   });
 });
 describe("Paper performance", () => {
+  it("closes only at or below a configured stop loss", () => {
+    expect(exitReason(90, 90)).toBe("STOP_LOSS");
+    expect(exitReason(80, 90)).toBe("STOP_LOSS");
+    expect(exitReason(100, 90)).toBeNull();
+    expect(exitReason(130, 90)).toBeNull();
+    expect(exitReason(1, null)).toBeNull();
+  });
   it("calculates dollar P&L from actual quantity", () => {
     expect(pnl(100, 125, 10)).toEqual({ amount: 250, percent: 25 });
     expect(pnl(100, 80, 10).amount).toBe(-200);

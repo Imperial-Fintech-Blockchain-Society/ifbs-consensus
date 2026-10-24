@@ -63,8 +63,8 @@ export function CloseProposalForm({ positionId }: { positionId: string }) {
         />
       </div>
       <p className="text-xs text-slate-500">
-        Positions close only after a majority of votes cast approves closing.
-        Ties keep the position open.
+        A majority of votes cast approves closing. Ties keep the position open.
+        Stop loss monitoring remains active during voting.
       </p>
       {error && (
         <p role="alert" className="text-sm text-rose-700">

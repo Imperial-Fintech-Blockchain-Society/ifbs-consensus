@@ -17,5 +17,7 @@ export async function pitchSummaries(
   return rows.map((p) => ({
     ...p,
     allocation: Number(p.allocation),
+    stopLossPercent:
+      p.stopLossPercent === null ? null : Number(p.stopLossPercent),
   }));
 }

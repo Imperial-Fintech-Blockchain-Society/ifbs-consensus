@@ -2,7 +2,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { prices, executablePrice } from "./coingecko";
-import { passes, closePasses } from "./rules";
+import { passes, closePasses, exitReason } from "./rules";
 import { lockFund, closePosition } from "./fund";
 const transactionOptions = { maxWait: 10000, timeout: 15000 };
 
@@ -69,6 +69,14 @@ export async function resolvePitches() {
               entryPrice: entry,
               quantity: current.allocation.div(entry),
               allocation: current.allocation,
+              stopPrice:
+                current.stopLossPercent === null
+                  ? null
+                  : entry.mul(
+                      new Prisma.Decimal(1).sub(
+                        current.stopLossPercent.div(100),
+                      ),
+                    ),
             },
           });
           await tx.fund.update({
@@ -93,6 +101,37 @@ export async function resolvePitches() {
     }
   }
   return { resolved, queued, failures };
+}
+
+export async function monitorPositions() {
+  const positions = await db.position.findMany({
+    where: { status: "OPEN", stopPrice: { not: null } },
+  });
+  const quotes = await prices(
+    positions.map((position) => position.coinId),
+    true,
+  );
+  let closed = 0;
+  const failures: string[] = [];
+  for (const position of positions) {
+    try {
+      const price = executablePrice(quotes[position.coinId]);
+      const reason = exitReason(
+        price,
+        position.stopPrice === null ? null : Number(position.stopPrice),
+      );
+      if (reason) {
+        await db.$transaction(async (tx) => {
+          await lockFund(tx);
+          if (await closePosition(tx, position.id, price, reason)) closed++;
+        }, transactionOptions);
+      }
+    } catch {
+      failures.push(position.id);
+    }
+  }
+  await db.rateLimit.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+  return { closed, failures };
 }
 
 export async function resolveCloseProposals() {
@@ -142,7 +181,13 @@ export async function resolveCloseProposals() {
               throw new Error(
                 "Retry with a price after the last vote commits.",
               );
-            await closePosition(tx, current.positionId, price, current.id);
+            await closePosition(
+              tx,
+              current.positionId,
+              price,
+              "EARLY_VOTE",
+              current.id,
+            );
           }
           await tx.closeProposal.update({
             where: { id: current.id },

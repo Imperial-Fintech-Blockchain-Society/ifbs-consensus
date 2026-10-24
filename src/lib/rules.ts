@@ -30,6 +30,10 @@ export const pitchSchema = z.object({
     .trim()
     .min(100, "Give your thesis at least 100 characters.")
     .max(20000),
+  stopLossPercent: z.coerce
+    .number()
+    .min(5, "Stop loss must be at least 5%.")
+    .max(20, "Stop loss must be at most 20%."),
   allocation: z.coerce
     .number()
     .positive()
@@ -56,6 +60,9 @@ export function closePasses(agree: number, total: number) {
 }
 export function passes(agree: number, total: number, quorum = QUORUM) {
   return total >= quorum && agree > total / 2;
+}
+export function exitReason(price: number, stop: number | null) {
+  return stop !== null && price <= stop ? "STOP_LOSS" : null;
 }
 export function pnl(entry: number, current: number, quantity: number) {
   return {

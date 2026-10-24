@@ -546,7 +546,12 @@ try {
       "## The opportunity\nBitcoin offers a compelling case for a patient investment horizon.\n\n## The risks\nA reversal in demand or a broader market selloff could invalidate this thesis. Members can announce a closing vote if the thesis changes.",
     );
   assert.equal(await page.getByLabel("Take profit (%)").count(), 0);
-  assert.equal(await page.getByLabel("Stop loss (%)").count(), 0);
+  assert.equal(await page.getByLabel("Stop loss (%)").inputValue(), "10");
+  assert.equal(await page.getByLabel("Stop loss (%)").getAttribute("min"), "5");
+  assert.equal(
+    await page.getByLabel("Stop loss (%)").getAttribute("max"),
+    "20",
+  );
   await page.getByRole("button", { name: "Preview", exact: true }).click();
   assert.equal(await page.getByLabel("Investment (USD)").inputValue(), "10000");
   await page.getByLabel("Investment (USD)").fill("1000");
@@ -723,7 +728,7 @@ try {
   assert.equal(Number(position.entryPrice), 100);
   assert.equal(Number(position.quantity), 10);
   assert.equal("targetPrice" in position, false);
-  assert.equal("stopPrice" in position, false);
+  assert.equal(Number(position.stopPrice), 90);
   price = 130;
   assert.equal(
     (
@@ -755,6 +760,7 @@ try {
             3,
           ),
         allocation,
+        stopLossPercent: 10,
         expiresAt: new Date(Date.now() - 1000),
         votes: {
           create: decisions.map((decision, i) => ({
@@ -780,7 +786,7 @@ try {
     true,
     true,
   ]);
-  const stop = await fixture("A pitch for vote-only closing testing", [
+  const stop = await fixture("A pitch for stop loss testing", [
     true,
     true,
     true,
@@ -822,12 +828,9 @@ try {
     200,
   );
   assert.equal(
-    (await db.position.findUnique({ where: { pitchId: stop.id } })).status,
-    "OPEN",
+    (await db.position.findUnique({ where: { pitchId: stop.id } })).closeReason,
+    "STOP_LOSS",
   );
-  await closeByVote([
-    await db.position.findUniqueOrThrow({ where: { pitchId: stop.id } }),
-  ]);
   // Keep a live position to verify portfolio quote rendering and outages.
   price = 100;
   const live = await fixture("A live position for valuation", [
@@ -1127,21 +1130,11 @@ try {
   assert.equal(
     (await db.closeProposal.findUnique({ where: { id: cancellationId } }))
       .status,
-    "PENDING",
-  );
-  const unchanged = await db.fund.findUnique({ where: { id: "main" } });
-  assert.equal(Number(unchanged.cash), Number(fullFund.cash));
-  assert.equal(Number(unchanged.allocated), 100000);
-  await closeByVote(await db.position.findMany({ where: { status: "OPEN" } }));
-  assert.equal(
-    (await db.closeProposal.findUnique({ where: { id: cancellationId } }))
-      .status,
-    "PASSED",
+    "CANCELLED",
   );
   const credited = await db.fund.findUnique({ where: { id: "main" } });
-  // Closing votes release cash before queued pitches execute in the same run.
-  assert.equal(Number(credited.allocated), 1000);
-  assert.equal(Number(credited.cash) - Number(fullFund.cash), 79000);
+  assert.equal(Number(credited.allocated), 0);
+  assert.equal(Number(credited.cash) - Number(fullFund.cash), 80000);
   assert.equal(
     (
       await anonymous.post("/api/cron/resolve", { headers: cronHeaders })
@@ -1313,7 +1306,7 @@ try {
   });
   assert.deepEqual(browserErrors, [], "Browser should have no uncaught errors");
   console.log(
-    "PASS: email confirmation, pending-account access, expiry/replay/concurrent confirmation, resend limits, delivery retry, domain/CSRF protection, login/logout, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, quorum/tie rejection, vote-only closing, portfolio P&L, public fund charts/valuations, snapshot integrity, digest preferences, fresh broadcasts/retry recovery, RLS, and mobile layouts.",
+    "PASS: email confirmation, pending-account access, expiry/replay/concurrent confirmation, resend limits, delivery retry, domain/CSRF protection, login/logout, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, quorum/tie rejection, closing votes and stop loss execution, portfolio P&L, public fund charts/valuations, snapshot integrity, digest preferences, fresh broadcasts/retry recovery, RLS, and mobile layouts.",
   );
   console.log(`Screenshots: ${artifacts}`);
 } finally {

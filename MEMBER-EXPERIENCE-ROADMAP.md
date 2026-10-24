@@ -6,7 +6,7 @@ This is a proposed implementation plan, not a description of features already bu
 
 ## 1. Starting point and implementation order
 
-The current app already provides token selection, Markdown pitches, reasoned voting, allocations, a shared paper fund, member-announced closing votes, and portfolio valuation. It starts with $100,000 cash, caps each pitch at $10,000, and caps open cost allocations at $100,000. Approval follows a three-day vote; execution can occur later if capital or prices are unavailable. It currently omits fees and slippage.
+The current app already provides token selection, Markdown pitches, reasoned voting, allocations, a shared paper fund, Stop Loss exits, member-announced closing votes, and portfolio valuation. It starts with $100,000 cash, caps each pitch at $10,000, and caps open cost allocations at $100,000. Approval follows a three-day vote; execution can occur later if capital or prices are unavailable. It currently omits fees and slippage.
 
 Relevant existing files:
 
@@ -75,7 +75,7 @@ Before publishing a pitch, the author chooses a planned loss budget, explains th
 
 ### Step 1: build a basic position-sizing calculator
 
-Inputs: current NAV, proposed allocation, a hypothetical downside scenario, and chosen risk-budget percentage of NAV. These are planning estimates; positions close only through member votes.
+Inputs: current NAV, proposed allocation, a hypothetical downside scenario, and chosen risk-budget percentage of NAV. These are planning estimates; positions close at their Stop Loss or through member votes.
 
 ```text
 Loss budget = NAV × risk-budget fraction

@@ -204,6 +204,26 @@ export function PitchForm() {
         </p>
       </div>
       <div>
+        <label htmlFor="sl" className="label">
+          Stop loss (%)
+        </label>
+        <input
+          id="sl"
+          name="stopLossPercent"
+          type="number"
+          min={5}
+          max={20}
+          step="0.01"
+          defaultValue={10}
+          required
+          className="input"
+        />
+        <p className="mt-2 text-xs text-slate-400">
+          Choose 5–20%. The monitor closes the position if its price falls to
+          this threshold.
+        </p>
+      </div>
+      <div>
         <label htmlFor="allocation" className="label">
           Investment (USD)
         </label>
@@ -224,8 +244,8 @@ export function PitchForm() {
       </div>
       <div className="rounded-xl bg-blue-50 p-4 text-xs leading-6 text-slate-600">
         3-day vote · 5-vote quorum · Majority approval. Execution requires
-        available capital. Positions close only after members approve a closing
-        vote.
+        available capital. Positions close at their stop loss or after members
+        approve a closing vote.
       </div>
       {error && (
         <p

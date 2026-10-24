@@ -100,7 +100,7 @@ export default function Home() {
               {
                 icon: Lightbulb,
                 title: "Make your case",
-                body: "Choose a token, write your investment thesis, and set your investment amount.",
+                body: "Choose a token, write your investment thesis, and set your investment amount and stop loss.",
               },
               {
                 icon: MessagesSquare,
