@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cronAuth, errorResponse, HttpError } from "@/lib/http";
-import { resolveAll, monitorPositions } from "@/lib/engine";
+import { resolveAll } from "@/lib/engine";
+import { db } from "@/lib/db";
 import { sendDigest } from "@/lib/digest";
 import { recordFundSnapshot } from "@/lib/public-fund";
 export const maxDuration = 300;
@@ -15,12 +16,15 @@ export async function POST(
       job === "resolve"
         ? await resolveAll()
         : job === "monitor"
-          ? await monitorPositions()
+          ? { failures: [] as string[] }
           : job === "digest"
             ? await sendDigest()
             : null;
     if (!result) throw new HttpError(404, "Unknown job.");
     if (job === "monitor") {
+      await db.rateLimit.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      });
       try {
         await recordFundSnapshot();
       } catch {

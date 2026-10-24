@@ -204,43 +204,6 @@ export function PitchForm() {
         </p>
       </div>
       <div>
-        <p className="label">Targets</p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="tp" className="mb-2 block text-xs text-slate-500">
-              Take profit (%)
-            </label>
-            <input
-              id="tp"
-              name="takeProfitPercent"
-              type="number"
-              min={1}
-              max={1000}
-              step="0.01"
-              defaultValue={25}
-              required
-              className="input"
-            />
-          </div>
-          <div>
-            <label htmlFor="sl" className="mb-2 block text-xs text-slate-500">
-              Stop loss (%)
-            </label>
-            <input
-              id="sl"
-              name="stopLossPercent"
-              type="number"
-              min={1}
-              max={90}
-              step="0.01"
-              defaultValue={10}
-              required
-              className="input"
-            />
-          </div>
-        </div>
-      </div>
-      <div>
         <label htmlFor="allocation" className="label">
           Investment (USD)
         </label>
@@ -261,7 +224,8 @@ export function PitchForm() {
       </div>
       <div className="rounded-xl bg-blue-50 p-4 text-xs leading-6 text-slate-600">
         3-day vote · 5-vote quorum · Majority approval. Execution requires
-        available capital.
+        available capital. Positions close only after members approve a closing
+        vote.
       </div>
       {error && (
         <p

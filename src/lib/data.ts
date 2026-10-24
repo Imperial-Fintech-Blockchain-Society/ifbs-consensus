@@ -16,8 +16,6 @@ export async function pitchSummaries(
   });
   return rows.map((p) => ({
     ...p,
-    takeProfitPercent: Number(p.takeProfitPercent),
-    stopLossPercent: Number(p.stopLossPercent),
     allocation: Number(p.allocation),
   }));
 }

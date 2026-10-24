@@ -5,7 +5,6 @@ import {
   pitchSchema,
   voteSchema,
   passes,
-  exitReason,
   pnl,
   closePasses,
   closeProposalSchema,
@@ -53,16 +52,21 @@ describe("Consensus decisions", () => {
       }).success,
     ).toBe(false);
   });
-  it("bounds exits and protects coin identifiers", () => {
+  it("validates pitches without exit targets and protects coin identifiers", () => {
     const valid = {
       coinId: "bitcoin",
       title: "A compelling Bitcoin thesis",
       thesis: "a".repeat(100),
-      stopLossPercent: 10,
-      takeProfitPercent: 25,
     };
     expect(pitchSchema.safeParse(valid).success).toBe(true);
     expect(pitchSchema.parse(valid).allocation).toBe(10000);
+    const legacyPitch = pitchSchema.parse({
+      ...valid,
+      takeProfitPercent: 25,
+      stopLossPercent: 10,
+    });
+    expect(legacyPitch).not.toHaveProperty("takeProfitPercent");
+    expect(legacyPitch).not.toHaveProperty("stopLossPercent");
     expect(
       pitchSchema.parse({ ...valid, allocation: "2345.67" }).allocation,
     ).toBe(2345.67);
@@ -71,14 +75,11 @@ describe("Consensus decisions", () => {
         false,
       );
     expect(
-      pitchSchema.safeParse({ ...valid, stopLossPercent: 100 }).success,
-    ).toBe(false);
-    expect(
       pitchSchema.safeParse({ ...valid, coinId: "../admin" }).success,
     ).toBe(false);
   });
 });
-describe("Early-close voting", () => {
+describe("Closing votes", () => {
   it("requires a strict majority without a pitch quorum", () => {
     expect(closePasses(0, 0)).toBe(false);
     expect(closePasses(1, 2)).toBe(false);
@@ -98,14 +99,7 @@ describe("Early-close voting", () => {
       );
   });
 });
-describe("Paper performance and exits", () => {
-  it("detects threshold crossings including gaps", () => {
-    expect(exitReason(125, 125, 90)).toBe("TAKE_PROFIT");
-    expect(exitReason(130, 125, 90)).toBe("TAKE_PROFIT");
-    expect(exitReason(90, 125, 90)).toBe("STOP_LOSS");
-    expect(exitReason(85, 125, 90)).toBe("STOP_LOSS");
-    expect(exitReason(100, 125, 90)).toBe(null);
-  });
+describe("Paper performance", () => {
   it("calculates dollar P&L from actual quantity", () => {
     expect(pnl(100, 125, 10)).toEqual({ amount: 250, percent: 25 });
     expect(pnl(100, 80, 10).amount).toBe(-200);

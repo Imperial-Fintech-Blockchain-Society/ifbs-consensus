@@ -39,8 +39,6 @@ export default async function Fund() {
           allocation: Number(p.allocation),
           quantity: Number(p.quantity),
           entryPrice: Number(p.entryPrice),
-          targetPrice: Number(p.targetPrice),
-          stopPrice: Number(p.stopPrice),
           entryTime: p.entryTime.toISOString(),
           closePrice: p.closePrice === null ? null : Number(p.closePrice),
           closeTime: p.closeTime?.toISOString() ?? null,

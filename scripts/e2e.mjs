@@ -10,9 +10,9 @@ import { chromium, request as playwrightRequest } from "@playwright/test";
 // Every test record lives in a unique schema, which is removed after the run.
 const schema = `ifbs_test_${Date.now()}_${randomBytes(4).toString("hex")}`;
 assert.match(schema, /^ifbs_test_[0-9]+_[a-f0-9]+$/);
-if (!process.env.DATABASE_URL)
-  throw new Error("Set DATABASE_URL before running end-to-end tests.");
-const url = new URL(process.env.DIRECT_URL || process.env.DATABASE_URL);
+if (!process.env.VERCEL_DB_URL)
+  throw new Error("Set VERCEL_DB_URL before running end-to-end tests.");
+const url = new URL(process.env.VERCEL_DB_URL);
 url.searchParams.set("schema", schema);
 const databaseUrl = url.toString();
 const db = new PrismaClient({ datasourceUrl: databaseUrl });
@@ -230,7 +230,7 @@ const mail = createServer(async (req, res) => {
 });
 const env = {
   ...process.env,
-  DATABASE_URL: databaseUrl,
+  VERCEL_DB_URL: databaseUrl,
   NEXT_PUBLIC_APP_URL: base,
   COINGECKO_API_URL: `http://localhost:3012/${schema}`,
   CRON_SECRET: cronSecret,
@@ -543,8 +543,10 @@ try {
   await page
     .getByLabel("Thesis", { exact: true })
     .fill(
-      "## The opportunity\nBitcoin offers a compelling case for a patient investment horizon.\n\n## The risks\nA reversal in demand or a broader market selloff could invalidate this thesis. We use a defined stop loss to manage downside.",
+      "## The opportunity\nBitcoin offers a compelling case for a patient investment horizon.\n\n## The risks\nA reversal in demand or a broader market selloff could invalidate this thesis. Members can announce a closing vote if the thesis changes.",
     );
+  assert.equal(await page.getByLabel("Take profit (%)").count(), 0);
+  assert.equal(await page.getByLabel("Stop loss (%)").count(), 0);
   await page.getByRole("button", { name: "Preview", exact: true }).click();
   assert.equal(await page.getByLabel("Investment (USD)").inputValue(), "10000");
   await page.getByLabel("Investment (USD)").fill("1000");
@@ -672,6 +674,44 @@ try {
   );
   assert.equal((await anonymous.post("/api/cron/resolve")).status(), 401);
   const cronHeaders = { Authorization: `Bearer ${cronSecret}` };
+  async function closeByVote(positions) {
+    for (const position of positions) {
+      const pending = await db.closeProposal.findFirst({
+        where: { positionId: position.id, status: "PENDING" },
+      });
+      const ballot = {
+        createdAt: new Date(Date.now() - 2 * 3600000),
+        expiresAt: new Date(Date.now() - 1000),
+        votes: {
+          create: {
+            voterId: stored.id,
+            decision: true,
+            reason: "The investment thesis has changed; close this position.",
+          },
+        },
+      };
+      if (pending) {
+        await db.closeProposal.update({
+          where: { id: pending.id },
+          data: ballot,
+        });
+      } else {
+        await db.closeProposal.create({
+          data: {
+            ...ballot,
+            positionId: position.id,
+            proposerId: stored.id,
+            reason: "The investment thesis has changed; close this position.",
+          },
+        });
+      }
+    }
+    for (const response of await Promise.all([
+      anonymous.post("/api/cron/resolve", { headers: cronHeaders }),
+      anonymous.post("/api/cron/resolve", { headers: cronHeaders }),
+    ]))
+      assert.equal(response.status(), 200, await response.text());
+  }
   const resolutions = await Promise.all([
     anonymous.post("/api/cron/resolve", { headers: cronHeaders }),
     anonymous.post("/api/cron/resolve", { headers: cronHeaders }),
@@ -682,8 +722,8 @@ try {
   const position = await db.position.findUnique({ where: { pitchId } });
   assert.equal(Number(position.entryPrice), 100);
   assert.equal(Number(position.quantity), 10);
-  assert.equal(Number(position.targetPrice), 125);
-  assert.equal(Number(position.stopPrice), 90);
+  assert.equal("targetPrice" in position, false);
+  assert.equal("stopPrice" in position, false);
   price = 130;
   assert.equal(
     (
@@ -692,8 +732,8 @@ try {
     200,
   );
   assert.equal(
-    (await db.position.findUnique({ where: { pitchId } })).closeReason,
-    "TAKE_PROFIT",
+    (await db.position.findUnique({ where: { pitchId } })).status,
+    "OPEN",
   );
   assert.equal(
     (
@@ -701,6 +741,7 @@ try {
     ).status(),
     200,
   );
+  await closeByVote([position]);
   async function fixture(title, decisions, allocation = 1000) {
     return db.pitch.create({
       data: {
@@ -713,8 +754,6 @@ try {
           "A research thesis with enough detail to discuss the opportunity and its risks. ".repeat(
             3,
           ),
-        stopLossPercent: 10,
-        takeProfitPercent: 25,
         allocation,
         expiresAt: new Date(Date.now() - 1000),
         votes: {
@@ -741,7 +780,7 @@ try {
     true,
     true,
   ]);
-  const stop = await fixture("A pitch for stop loss testing", [
+  const stop = await fixture("A pitch for vote-only closing testing", [
     true,
     true,
     true,
@@ -783,9 +822,12 @@ try {
     200,
   );
   assert.equal(
-    (await db.position.findUnique({ where: { pitchId: stop.id } })).closeReason,
-    "STOP_LOSS",
+    (await db.position.findUnique({ where: { pitchId: stop.id } })).status,
+    "OPEN",
   );
+  await closeByVote([
+    await db.position.findUniqueOrThrow({ where: { pitchId: stop.id } }),
+  ]);
   // Keep a live position to verify portfolio quote rendering and outages.
   price = 100;
   const live = await fixture("A live position for valuation", [
@@ -885,7 +927,7 @@ try {
     path: `${artifacts}/portfolio-closed.png`,
     fullPage: true,
   });
-  // Early-close proposals use their own one-day ballot, without pitch quorum.
+  // Closing proposals use their own one-day ballot, without pitch quorum.
   const livePosition = await db.position.findUnique({
     where: { pitchId: live.id },
   });
@@ -931,7 +973,7 @@ try {
         data: {
           decision: false,
           reason:
-            "Keep the position open until the original targets are reached.",
+            "Keep the position open because the original thesis remains valid.",
         },
       })
     ).status(),
@@ -1085,11 +1127,21 @@ try {
   assert.equal(
     (await db.closeProposal.findUnique({ where: { id: cancellationId } }))
       .status,
-    "CANCELLED",
+    "PENDING",
+  );
+  const unchanged = await db.fund.findUnique({ where: { id: "main" } });
+  assert.equal(Number(unchanged.cash), Number(fullFund.cash));
+  assert.equal(Number(unchanged.allocated), 100000);
+  await closeByVote(await db.position.findMany({ where: { status: "OPEN" } }));
+  assert.equal(
+    (await db.closeProposal.findUnique({ where: { id: cancellationId } }))
+      .status,
+    "PASSED",
   );
   const credited = await db.fund.findUnique({ where: { id: "main" } });
-  assert.equal(Number(credited.allocated), 0);
-  assert.equal(Number(credited.cash) - Number(fullFund.cash), 80000);
+  // Closing votes release cash before queued pitches execute in the same run.
+  assert.equal(Number(credited.allocated), 1000);
+  assert.equal(Number(credited.cash) - Number(fullFund.cash), 79000);
   assert.equal(
     (
       await anonymous.post("/api/cron/resolve", { headers: cronHeaders })
@@ -1261,7 +1313,7 @@ try {
   });
   assert.deepEqual(browserErrors, [], "Browser should have no uncaught errors");
   console.log(
-    "PASS: email confirmation, pending-account access, expiry/replay/concurrent confirmation, resend limits, delivery retry, domain/CSRF protection, login/logout, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, quorum/tie rejection, TP/SL execution, portfolio P&L, public fund charts/valuations, snapshot integrity, digest preferences, fresh broadcasts/retry recovery, RLS, and mobile layouts.",
+    "PASS: email confirmation, pending-account access, expiry/replay/concurrent confirmation, resend limits, delivery retry, domain/CSRF protection, login/logout, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, quorum/tie rejection, vote-only closing, portfolio P&L, public fund charts/valuations, snapshot integrity, digest preferences, fresh broadcasts/retry recovery, RLS, and mobile layouts.",
   );
   console.log(`Screenshots: ${artifacts}`);
 } finally {

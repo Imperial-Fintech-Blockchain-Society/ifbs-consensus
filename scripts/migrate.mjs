@@ -8,10 +8,7 @@ const result = spawnSync(
   ["node_modules/prisma/build/index.js", "migrate", mode],
   {
     stdio: "inherit",
-    env: {
-      ...process.env,
-      DATABASE_URL: process.env.DIRECT_URL || process.env.DATABASE_URL,
-    },
+    env: process.env,
   },
 );
 process.exit(result.status ?? 1);

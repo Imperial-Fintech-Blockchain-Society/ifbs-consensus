@@ -70,8 +70,6 @@ export type PitchSummary = {
   author: { name: string };
   votes: { decision: boolean }[];
   quorum: number;
-  takeProfitPercent: number;
-  stopLossPercent: number;
   allocation: number;
 };
 export function PitchCard({ pitch }: { pitch: PitchSummary }) {
@@ -103,10 +101,6 @@ export function PitchCard({ pitch }: { pitch: PitchSummary }) {
         {pitch.thesis.replace(/[#*_`]/g, "")}
       </p>
       <div className="mb-5 flex flex-wrap gap-4 text-xs">
-        <span className="text-emerald-600">
-          ↗ TP +{pitch.takeProfitPercent}%
-        </span>
-        <span className="text-slate-500">↘ SL −{pitch.stopLossPercent}%</span>
         <span className="text-slate-500">{money(pitch.allocation)}</span>
       </div>
       <div className="mt-auto">

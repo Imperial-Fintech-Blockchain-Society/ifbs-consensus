@@ -17,13 +17,12 @@ export async function lockFund(tx: Prisma.TransactionClient) {
   return tx.fund.findUniqueOrThrow({ where: { id: "main" } });
 }
 // Call with the fund lock held. Every exit credits proceeds and releases the
-// allocation in the same transaction, so monitoring and close votes cannot double-credit.
+// allocation in the same transaction, so repeated resolution cannot double-credit.
 export async function closePosition(
   tx: Prisma.TransactionClient,
   id: string,
   price: number,
-  reason: string,
-  proposalId?: string,
+  proposalId: string,
 ) {
   await tx.$queryRaw`SELECT "id" FROM "Position" WHERE "id" = ${id} FOR UPDATE`;
   const position = await tx.position.findUniqueOrThrow({ where: { id } });
@@ -37,7 +36,7 @@ export async function closePosition(
       status: "CLOSED",
       closePrice: price,
       closeTime: new Date(),
-      closeReason: reason,
+      closeReason: "EARLY_VOTE",
     },
   });
   await tx.fund.update({
@@ -51,7 +50,7 @@ export async function closePosition(
     where: {
       positionId: id,
       status: "PENDING",
-      ...(proposalId ? { id: { not: proposalId } } : {}),
+      id: { not: proposalId },
     },
     data: { status: "CANCELLED", resolvedAt: new Date() },
   });

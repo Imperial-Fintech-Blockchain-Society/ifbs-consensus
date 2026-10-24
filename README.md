@@ -23,10 +23,9 @@ Links expire after 24 hours. Submitting signup again sends a new link and invali
 
 | Variable | Purpose | Required |
 | --- | --- | --- |
-| `DATABASE_URL` | Supabase PostgreSQL connection string used by Prisma on the server. URL-encode special characters in the password. For Vercel, use the Supabase transaction pooler URL with `?pgbouncer=true&connection_limit=1`. | Yes |
-| `DIRECT_URL` | Direct Postgres connection or session pooler URL for migration commands. `db:migrate` and `db:dev` use this when set, otherwise `DATABASE_URL`. | If your runtime connection is transaction-pooled |
+| `VERCEL_DB_URL` | The single PostgreSQL connection string used by the app, Prisma CLI, migrations, Studio, and end-to-end tests. Use the Supabase session pooler (port 5432) so the same URL supports IPv4 runtime connections and migrations. URL-encode special characters in the password. | Yes |
 | `JWT_SECRET` | At least 32 random characters for signing member sessions. | Yes |
-| `NEXT_PUBLIC_APP_URL` | Exact app origin, e.g. `http://localhost:3000` locally and `https://consensus.your-domain.com` in production. Used for origin checks and email links. | Yes |
+| `NEXT_PUBLIC_APP_URL` | Canonical app URL used for email links and digest identity. Its origin is also trusted for website actions. The app always accepts `https://ifbsconsensus.com`, `https://ifbs-consensus.vercel.app`, `http://localhost:3000`, and `http://localhost:3001`. | Yes |
 | `CRON_SECRET` | At least 32 random characters. Scheduled requests must send `Authorization: Bearer <CRON_SECRET>`. | For scheduled jobs |
 | `COINGECKO_API_URL` | Defaults to `https://api.coingecko.com/api/v3`. | No |
 | `COINGECKO_API_KEY` | Optional Demo API key, sent through `x-cg-demo-api-key`. Keyless endpoints are supported; Demo keys improve reliability. | No |
@@ -37,10 +36,12 @@ Links expire after 24 hours. Submitting signup again sends a new link and invali
 
 Generate each secret separately with `openssl rand -hex 32`. Keep `.env` private. Only the public app URL has a `NEXT_PUBLIC_` prefix.
 
+The `20261024120000_vote_only_closing` migration removes exit-level columns from `Pitch` and `Position`, preserving existing positions and historical closes. Coordinate this migration with deployment of the updated app: older versions require those columns.
+
 ## Features and fund rules
 
 - Custom bcrypt password authentication, HS256 JWT sessions, HTTP-only cookies, same-origin mutation checks and database-backed rate limits.
-- Member dashboard, searchable/filterable pitches, CoinGecko token selection, Markdown thesis editing and preview, and immutable published targets.
+- Member dashboard, searchable/filterable pitches, CoinGecko token selection, Markdown thesis editing and preview, and immutable published pitches.
 - One immutable vote per member per pitch; agree/disagree requires a public reason of at least 20 characters. Authors may vote under the same rules as other members.
 - Voting lasts three days. Resolution happens after the deadline, requires at least five votes, and passes only with more than 50% agreement. A tie or missing quorum rejects the pitch.
 - Pitch investments default to $10,000 and accept any positive cent amount up to $10,000.
@@ -49,9 +50,9 @@ Generate each secret separately with `openssl rand -hex 32`. Keep `.env` private
 - Portfolio tracks entry prices, quantities, live USD valuations, realized and unrealized P&L, and closed positions. Open quotes refresh every 60 seconds.
 - Public `/fund` page shows current USD cash and aggregated crypto holdings in a pie chart, plus a fund-return line chart. No account is required. `/api/fund` exposes only fund valuations and asset holdings. Missing or stale quotes suppress the total and allocation chart rather than substituting entry prices.
 - The monitor job records complete fund valuations, at most once per minute. Performance history begins when this feature is installed; historical market values are not fabricated or backfilled. Apply the `20261003150000_fund_performance` migration before deploying. A cash-only fund receives an initial valuation during migration.
-- Members can start an early-close vote from a position. The proposer chooses a 1–24 hour window. A strict majority of votes cast closes the position at the current market price after the deadline; no five-vote quorum applies. Ties and no-vote ballots are rejected. Each member gets one reasoned vote. Only one close proposal can be pending per position.
-- TP/SL exits remain active during close voting. If a position closes first, its pending proposal is cancelled. Scheduler retries cannot close or credit the same position twice, and unavailable prices leave an approved close proposal pending for retry with voting closed.
-- Scheduled monitoring closes positions at the observed price if a take-profit or stop-loss threshold is crossed. Checks are periodic; no guarantee of filling at the exact threshold. The simulation omits fees and slippage.
+- Members can start an closing vote from a position. The proposer chooses a 1–24 hour window. A strict majority of votes cast closes the position at the current market price after the deadline; no five-vote quorum applies. Ties and no-vote ballots are rejected. Each member gets one reasoned vote. Only one close proposal can be pending per position.
+- A member-announced closing vote is the only way to close a position. Scheduler retries cannot close or credit the same position twice, and unavailable prices leave an approved close proposal pending for retry with voting closed.
+- Scheduled monitoring only records fund valuations and cleans up expired rate limits. The simulation omits fees and slippage.
 - Member track records show published/passed pitches, contributed votes, and realized performance from their own closed pitches.
 - Weekly HTML and plain-text digest of new active pitches via Resend Broadcasts. Each new digest request creates a fresh broadcast with the current contents and submits it to a dedicated member segment. A database lease serializes overlapping calls; failed requests recover their unfinished drafts without resending the same broadcast.
 
@@ -85,8 +86,8 @@ Apply the `20261010140000_digest_broadcasts` and `20261010150000_digest_generati
 ## Deploy on Vercel
 
 1. Import this GitHub repository into Vercel and select the Next.js framework preset. Choose Node.js 24.
-2. Set the environment variables above. `NEXT_PUBLIC_APP_URL` must match the production origin; use a corresponding origin for each preview deployment you want to test. Keep secrets server-only.
-3. Configure a Supabase pooler `DATABASE_URL` for serverless requests and a direct/session-pooler `DIRECT_URL` for migrations.
+2. Set the environment variables above. Set `NEXT_PUBLIC_APP_URL` to the canonical production URL for email links. Both production domains and localhost ports 3000/3001 are already trusted for website actions; no extra origin variable is needed. Keep secrets server-only.
+3. Set `VERCEL_DB_URL` to your Supabase session-pooler connection string (port 5432), both locally and in Vercel. All database commands use this one variable.
 4. Apply migrations with `npm run db:migrate` against the production database before starting the deployment. The build generates Prisma but deliberately does not run database migrations.
 5. Configure `RESEND_API_KEY`, a verified `EMAIL_FROM`, and the public `NEXT_PUBLIC_APP_URL` before accepting signups. Apply the `20261010120000_email_confirmation` migration. Deploy with the default `npm run build` command, then register a member account and check pitch creation and the portfolio.
 6. Add the GitHub Actions secrets. Enable Actions on the default branch and run `resolve` and `monitor` manually once.
@@ -104,7 +105,7 @@ npm audit --omit=dev
 npm run test:e2e
 ```
 
-The end-to-end script requires a database owner connection and installed Google Chrome. Set `PLAYWRIGHT_CHANNEL=chromium` to use a Playwright-managed Chromium installation. It creates a uniquely named `ifbs_test_*` database schema, runs migrations, launches a separate app on port 3001 and local CoinGecko/Resend mocks on ports 3012–3013, then removes its schema and records in `finally`. It never sends real emails or alters public application data. Screenshots are written to `/private/tmp/ifbs-screenshots`. It checks confirmation emails and fallback links, pending-account access, token expiry/replay/concurrent consumption, replacement links, delivery failure/retry, resend limits, login/logout, domain/origin restrictions, cookie flags, password hashes, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, rejection rules, TP/SL exits, portfolio P&L, broadcast creation/recovery/update/send, concurrent submission, recipient pagination, opt-outs/unsubscribes, RLS and responsive layout.
+The end-to-end script requires a database owner connection and installed Google Chrome. Set `PLAYWRIGHT_CHANNEL=chromium` to use a Playwright-managed Chromium installation. It creates a uniquely named `ifbs_test_*` database schema, runs migrations, launches a separate app on port 3001 and local CoinGecko/Resend mocks on ports 3012–3013, then removes its schema and records in `finally`. It never sends real emails or alters public application data. Screenshots are written to `/private/tmp/ifbs-screenshots`. It checks confirmation emails and fallback links, pending-account access, token expiry/replay/concurrent consumption, replacement links, delivery failure/retry, resend limits, login/logout, domain/origin restrictions, cookie flags, password hashes, token search, Markdown, voting, duplicate/deadline protection, concurrent resolution, stale-price retries, rejection rules, vote-only exits, portfolio P&L, broadcast creation/recovery/update/send, concurrent submission, recipient pagination, opt-outs/unsubscribes, RLS and responsive layout.
 
 The production dependency audit is clean. Some development lint dependencies currently have upstream audit findings with no compatible patch; they are not reachable through the deployed app. Do not use `npm audit fix --force`, which currently proposes downgrading Next.js tooling.
 

@@ -24,8 +24,6 @@ export type PositionData = {
   allocation: number;
   quantity: number;
   entryPrice: number;
-  targetPrice: number;
-  stopPrice: number;
   entryTime: string;
   closePrice: number | null;
   closeTime: string | null;
@@ -206,7 +204,7 @@ export function Portfolio({
                     tab === "OPEN" ? "Current price" : "Exit price",
                     "Paper value",
                     "Return",
-                    tab === "OPEN" ? "Exit targets" : "Closed",
+                    tab === "OPEN" ? "Closing" : "Closed",
                     "",
                   ].map((h, i) => (
                     <th key={i} className="px-5 py-4 font-semibold">
@@ -276,14 +274,9 @@ export function Portfolio({
                       </td>
                       <td className="px-5 py-5 text-[10px]">
                         {p.status === "OPEN" ? (
-                          <>
-                            <p className="text-emerald-600">
-                              TP {money(p.targetPrice)}
-                            </p>
-                            <p className="mt-1 text-slate-400">
-                              SL {money(p.stopPrice)}
-                            </p>
-                          </>
+                          <p className="text-slate-500">
+                            Closing vote required
+                          </p>
                         ) : (
                           <>
                             <p

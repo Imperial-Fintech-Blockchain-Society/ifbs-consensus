@@ -43,7 +43,7 @@ export function CloseProposalForm({ positionId }: { positionId: string }) {
           required
           rows={4}
           className="input"
-          placeholder="Why should this position close early?"
+          placeholder="Why should this position close?"
         />
       </div>
       <div>
@@ -63,7 +63,8 @@ export function CloseProposalForm({ positionId }: { positionId: string }) {
         />
       </div>
       <p className="text-xs text-slate-500">
-        Majority of votes cast. Ties keep the position open.
+        Positions close only after a majority of votes cast approves closing.
+        Ties keep the position open.
       </p>
       {error && (
         <p role="alert" className="text-sm text-rose-700">

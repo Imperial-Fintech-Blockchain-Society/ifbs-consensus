@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("VERCEL_DB_URL")
 }
 
 enum PitchStatus {
@@ -51,24 +51,22 @@ model PendingSignup {
 }
 
 model Pitch {
-  id                String      @id @default(cuid())
-  authorId          String
-  author            User        @relation(fields: [authorId], references: [id])
-  coinId            String
-  tokenName         String
-  ticker            String
-  title             String
-  thesis            String
-  stopLossPercent   Decimal     @db.Decimal(8, 2)
-  takeProfitPercent Decimal     @db.Decimal(8, 2)
-  allocation        Decimal     @default(10000) @db.Decimal(18, 2)
-  quorum            Int         @default(5)
-  status            PitchStatus @default(PENDING)
-  createdAt         DateTime    @default(now())
-  expiresAt         DateTime
-  resolvedAt        DateTime?
-  votes             Vote[]
-  position          Position?
+  id         String      @id @default(cuid())
+  authorId   String
+  author     User        @relation(fields: [authorId], references: [id])
+  coinId     String
+  tokenName  String
+  ticker     String
+  title      String
+  thesis     String
+  allocation Decimal     @default(10000) @db.Decimal(18, 2)
+  quorum     Int         @default(5)
+  status     PitchStatus @default(PENDING)
+  createdAt  DateTime    @default(now())
+  expiresAt  DateTime
+  resolvedAt DateTime?
+  votes      Vote[]
+  position   Position?
 
   @@index([status, expiresAt])
 }
@@ -95,8 +93,6 @@ model Position {
   entryPrice     Decimal         @db.Decimal(30, 12)
   quantity       Decimal         @db.Decimal(30, 12)
   allocation     Decimal         @db.Decimal(18, 2)
-  targetPrice    Decimal         @db.Decimal(30, 12)
-  stopPrice      Decimal         @db.Decimal(30, 12)
   entryTime      DateTime        @default(now())
   status         PositionStatus  @default(OPEN)
   closePrice     Decimal?        @db.Decimal(30, 12)

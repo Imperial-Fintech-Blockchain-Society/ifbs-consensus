@@ -44,12 +44,10 @@ export default async function PositionPage({
         title={`${position.pitch.tokenName} position`}
         action={<Status status={position.status} />}
       />
-      <div className="card mb-6 grid gap-5 p-6 sm:grid-cols-4">
+      <div className="card mb-6 grid gap-5 p-6 sm:grid-cols-2">
         {[
           ["Investment", money(Number(position.allocation))],
           ["Entry", money(Number(position.entryPrice))],
-          ["Take profit", money(Number(position.targetPrice))],
-          ["Stop loss", money(Number(position.stopPrice))],
         ].map(([label, value]) => (
           <div key={label}>
             <p className="text-xs text-slate-500">{label}</p>

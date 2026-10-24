@@ -42,13 +42,17 @@ export function errorResponse(error: unknown) {
     { status: 503 },
   );
 }
+const trustedOrigins = new Set([
+  "https://ifbsconsensus.com",
+  "https://ifbs-consensus.vercel.app",
+  "http://localhost:3000",
+  "http://localhost:3001",
+]);
 export function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   const configured = process.env.NEXT_PUBLIC_APP_URL;
-  const expected = configured
-    ? new URL(configured).origin
-    : new URL(request.url).origin;
-  if (!origin || origin !== expected)
+  const configuredOrigin = configured ? new URL(configured).origin : null;
+  if (!origin || (!trustedOrigins.has(origin) && origin !== configuredOrigin))
     throw new HttpError(403, "Request origin is not allowed.");
 }
 export async function jsonBody(request: Request) {

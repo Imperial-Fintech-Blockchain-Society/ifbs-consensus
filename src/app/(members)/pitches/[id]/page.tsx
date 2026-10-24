@@ -62,23 +62,13 @@ export default async function PitchDetail({
       <div className="grid items-start gap-7 xl:grid-cols-[1fr_340px]">
         <div>
           <section className="card p-6 sm:p-8">
-            <div className="mb-7 grid grid-cols-3 gap-3 border-b border-slate-100 pb-7">
-              {[
-                ["Take profit", `+${pitch.takeProfitPercent}%`],
-                ["Stop loss", `−${pitch.stopLossPercent}%`],
-                ["Paper allocation", money(Number(pitch.allocation))],
-              ].map(([label, value], i) => (
-                <div key={label}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                    {label}
-                  </p>
-                  <p
-                    className={`mt-2 text-lg font-bold sm:text-xl ${i === 0 ? "text-emerald-600" : ""}`}
-                  >
-                    {value}
-                  </p>
-                </div>
-              ))}
+            <div className="mb-7 border-b border-slate-100 pb-7">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                Paper allocation
+              </p>
+              <p className="mt-2 text-lg font-bold sm:text-xl">
+                {money(Number(pitch.allocation))}
+              </p>
             </div>
             <p className="eyebrow mb-6 text-brand">The investment thesis</p>
             <div className="markdown text-sm text-slate-600">

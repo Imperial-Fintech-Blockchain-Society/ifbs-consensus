@@ -6,7 +6,7 @@ This is a proposed implementation plan, not a description of features already bu
 
 ## 1. Starting point and implementation order
 
-The current app already provides token selection, Markdown pitches, reasoned voting, allocations, a shared paper fund, stop-loss/take-profit exits, and portfolio valuation. It starts with $100,000 cash, caps each pitch at $10,000, and caps open cost allocations at $100,000. Approval follows a three-day vote; execution can occur later if capital or prices are unavailable. It currently omits fees and slippage.
+The current app already provides token selection, Markdown pitches, reasoned voting, allocations, a shared paper fund, member-announced closing votes, and portfolio valuation. It starts with $100,000 cash, caps each pitch at $10,000, and caps open cost allocations at $100,000. Approval follows a three-day vote; execution can occur later if capital or prices are unavailable. It currently omits fees and slippage.
 
 Relevant existing files:
 
@@ -71,27 +71,26 @@ Research belongs in authenticated member views. Publish only deliberately select
 
 ### Member experience
 
-Before publishing a pitch, the author chooses a planned loss budget, explains the stop and thesis invalidation, and shows how the proposed position affects the fund. A reviewer challenges whether the sizing remains sensible under a worse execution or a market shock.
+Before publishing a pitch, the author chooses a planned loss budget, explains the downside scenario and thesis invalidation, and shows how the proposed position affects the fund. A reviewer challenges whether the sizing remains sensible under a worse execution or a market shock.
 
 ### Step 1: build a basic position-sizing calculator
 
-Inputs: current NAV, proposed allocation, stop-loss percentage, take-profit percentage, and chosen risk-budget percentage of NAV.
+Inputs: current NAV, proposed allocation, a hypothetical downside scenario, and chosen risk-budget percentage of NAV. These are planning estimates; positions close only through member votes.
 
 ```text
 Loss budget = NAV × risk-budget fraction
-Suggested position value = loss budget / stop-loss fraction
-Planned stop loss = proposed allocation × stop-loss fraction
-Planned stop loss as fraction of NAV = planned stop loss / NAV
-Gross reward/risk ratio = take-profit fraction / stop-loss fraction
+Suggested position value = loss budget / downside-scenario fraction
+Scenario loss = proposed allocation × downside-scenario fraction
+Scenario loss as fraction of NAV = scenario loss / NAV
 ```
 
-Example: $100,000 NAV, a 0.5% planned loss budget, and a 10% stop imply $500 budget and $5,000 position value. A $10,000 allocation with the same stop implies $1,000 planned loss. Apply available cash, the existing $10,000 per-pitch cap, the open-allocation cap, and any approved concentration limits separately; show which constraint binds.
+Example: $100,000 NAV, a 0.5% planned loss budget, and a 10% downside scenario imply $500 budget and $5,000 position value. A $10,000 allocation with the same downside scenario implies $1,000 planned loss. Apply available cash, the existing $10,000 per-pitch cap, the open-allocation cap, and any approved concentration limits separately; show which constraint binds.
 
-Call this a **planned loss at the stop**, not a maximum possible loss. Periodic monitoring, gaps, and poor liquidity can produce a worse exit. A reward/risk ratio does not establish a probability of success. [CME position-sizing explanation](https://www.cmegroup.com/education/courses/trade-and-risk-management/proper-position-size).
+Call this a **scenario loss estimate**, not a maximum possible loss. Voting delays, gaps, and poor liquidity can produce a worse exit. The scenario does not establish a probability of success. [CME position-sizing explanation](https://www.cmegroup.com/education/courses/trade-and-risk-management/proper-position-size).
 
 ### Step 2: collect the reasoning and freeze a risk snapshot
 
-Add a proposed `PitchRiskAssessment` linked to the pitch with NAV, allocation, risk budget, planned stop loss, stop rationale, invalidation criteria, policy version, and quote timestamps. Calculate authoritative values on the server. Validate finite positive inputs and enforce existing pitch ranges.
+Add a proposed `PitchRiskAssessment` linked to the pitch with NAV, allocation, risk budget, scenario loss, scenario rationale, invalidation criteria, policy version, and quote timestamps. Calculate authoritative values on the server. Validate finite positive inputs and enforce the pitch allocation limit.
 
 Show the snapshot beside the voting controls so members vote on the same assumptions. Keep later reassessments as separate timestamped records rather than overwriting the publication snapshot.
 
