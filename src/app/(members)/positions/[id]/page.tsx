@@ -122,9 +122,11 @@ export default async function PositionPage({
                     <p className="text-xs font-semibold">
                       {v.voter.name} · {v.decision ? "Close" : "Keep open"}
                     </p>
-                    <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-500">
-                      {v.reason}
-                    </p>
+                    {v.reason && (
+                      <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-500">
+                        {v.reason}
+                      </p>
+                    )}
                   </div>
                 ))}
               </article>

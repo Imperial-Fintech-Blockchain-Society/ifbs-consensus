@@ -66,22 +66,17 @@ export function VoteForm({
       </div>
       <div>
         <label htmlFor={`reason-${pitchId}`} className="label">
-          Reason
+          Comment <span className="font-normal text-slate-400">(optional)</span>
         </label>
         <textarea
           id={`reason-${pitchId}`}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          minLength={20}
           maxLength={2000}
-          required
           rows={5}
           className="input resize-y"
-          placeholder="Explain your vote"
+          placeholder="Explain your vote (optional)"
         />
-        <p className="mt-2 text-[11px] text-slate-400">
-          At least 20 characters. Your reasoning is public to members.
-        </p>
       </div>
       {error && (
         <p role="alert" className="text-xs text-rose-700">
