@@ -146,9 +146,11 @@ export default async function PitchDetail({
                         {v.decision ? "Agrees" : "Disagrees"}
                       </span>
                     </div>
-                    <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-600">
-                      {v.reason}
-                    </p>
+                    {v.reason && (
+                      <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-600">
+                        {v.reason}
+                      </p>
+                    )}
                   </article>
                 ))}
               </div>
